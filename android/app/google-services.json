@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "1035330986637",
+    "project_id": "technova-app-ea5bd",
+    "storage_bucket": "technova-app-ea5bd.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1035330986637:android:508bfc088163b1b1cff8c4",
+        "android_client_info": {
+          "package_name": "com.example.my_app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1035330986637-v2kpj45l5a3rb09c0mskkhrhkuj6cc23.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBGSdnr2kB4iv4W6iRt9PzEiiG85wHq37k"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1035330986637-v2kpj45l5a3rb09c0mskkhrhkuj6cc23.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
