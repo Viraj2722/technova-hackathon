@@ -1,5 +1,6 @@
 
 import 'package:flutter/material.dart';
+import '../widgets/app_header.dart';
 
 class CommunityScreen extends StatefulWidget {
   const CommunityScreen({super.key});
@@ -28,6 +29,10 @@ class _CommunityScreenState extends State<CommunityScreen> with SingleTickerProv
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        const Padding(
+          padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
+          child: AppHeader(),
+        ),
         const Padding(
           padding: EdgeInsets.all(16),
           child: Text(

@@ -41,30 +41,33 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyCCnHwlLzdk6Pfkj6Lm4avlqnQgsqz4xkQ',
-    appId: '1:1035330986637:web:6b08d6506890d438cff8c4',
-    messagingSenderId: '1035330986637',
-    projectId: 'technova-app-ea5bd',
-    authDomain: 'technova-app-ea5bd.firebaseapp.com',
-    storageBucket: 'technova-app-ea5bd.firebasestorage.app',
-    measurementId: 'G-Y4GH5B9HN6',
+    apiKey: 'AIzaSyDDCM-sWZqlWDYgfUW20y_OBdJFx-rqTmY',
+    appId: '1:383663182444:web:449d1befa8737a42e03e49',
+    messagingSenderId: '383663182444',
+    projectId: 'my-app-2ddc5',
+    authDomain: 'my-app-2ddc5.firebaseapp.com',
+    databaseURL: 'https://my-app-2ddc5-default-rtdb.firebaseio.com',
+    storageBucket: 'my-app-2ddc5.firebasestorage.app',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyBGSdnr2kB4iv4W6iRt9PzEiiG85wHq37k',
-    appId: '1:1035330986637:android:508bfc088163b1b1cff8c4',
-    messagingSenderId: '1035330986637',
-    projectId: 'technova-app-ea5bd',
-    storageBucket: 'technova-app-ea5bd.firebasestorage.app',
+    apiKey: 'AIzaSyBmiNy_koYl8b1zlH8QquYEPrr6Pr6g3DQ',
+    appId: '1:383663182444:android:21d71f764ad5e53de03e49',
+    messagingSenderId: '383663182444',
+    projectId: 'my-app-2ddc5',
+    databaseURL: 'https://my-app-2ddc5-default-rtdb.firebaseio.com',
+    storageBucket: 'my-app-2ddc5.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyBN3xkVW615Bp8mFNbr7EmTB_M0VXeXr24',
-    appId: '1:1035330986637:ios:9539396498099e86cff8c4',
-    messagingSenderId: '1035330986637',
-    projectId: 'technova-app-ea5bd',
-    storageBucket: 'technova-app-ea5bd.firebasestorage.app',
-    iosClientId: '1035330986637-2nqjml29eoi4fs5a7jvrerg0fkkrs9er.apps.googleusercontent.com',
+    apiKey: 'AIzaSyDjo7P8FTnjYYI6PJSN-QLU6T-qaDqwIsk',
+    appId: '1:383663182444:ios:3f88d3f3e3d63734e03e49',
+    messagingSenderId: '383663182444',
+    projectId: 'my-app-2ddc5',
+    databaseURL: 'https://my-app-2ddc5-default-rtdb.firebaseio.com',
+    storageBucket: 'my-app-2ddc5.firebasestorage.app',
+    androidClientId: '383663182444-1nkv2117cp82u3008ilp6lokqicp07gm.apps.googleusercontent.com',
+    iosClientId: '383663182444-0s241k64hn7s0m2kgddr79b7tf0o9bla.apps.googleusercontent.com',
     iosBundleId: 'com.example.myApp',
   );
 

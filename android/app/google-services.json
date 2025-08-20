@@ -1,33 +1,42 @@
 {
   "project_info": {
-    "project_number": "1035330986637",
-    "project_id": "technova-app-ea5bd",
-    "storage_bucket": "technova-app-ea5bd.firebasestorage.app"
+    "project_number": "383663182444",
+    "firebase_url": "https://my-app-2ddc5-default-rtdb.firebaseio.com",
+    "project_id": "my-app-2ddc5",
+    "storage_bucket": "my-app-2ddc5.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:1035330986637:android:508bfc088163b1b1cff8c4",
+        "mobilesdk_app_id": "1:383663182444:android:21d71f764ad5e53de03e49",
         "android_client_info": {
-          "package_name": "com.example.my_app"
+          "package_name": "com.technova.skyscan"
         }
       },
       "oauth_client": [
         {
-          "client_id": "1035330986637-v2kpj45l5a3rb09c0mskkhrhkuj6cc23.apps.googleusercontent.com",
+          "client_id": "383663182444-1nkv2117cp82u3008ilp6lokqicp07gm.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.technova.skyscan",
+            "certificate_hash": "8f556eed2b23bb4ab43d8097e06ed00f0860921d"
+          }
+        },
+        {
+          "client_id": "383663182444-hlm2ev3v46jh1qttj6u7jsqdomo6subi.apps.googleusercontent.com",
           "client_type": 3
         }
       ],
       "api_key": [
         {
-          "current_key": "AIzaSyBGSdnr2kB4iv4W6iRt9PzEiiG85wHq37k"
+          "current_key": "AIzaSyBmiNy_koYl8b1zlH8QquYEPrr6Pr6g3DQ"
         }
       ],
       "services": {
         "appinvite_service": {
           "other_platform_oauth_client": [
             {
-              "client_id": "1035330986637-v2kpj45l5a3rb09c0mskkhrhkuj6cc23.apps.googleusercontent.com",
+              "client_id": "383663182444-hlm2ev3v46jh1qttj6u7jsqdomo6subi.apps.googleusercontent.com",
               "client_type": 3
             }
           ]

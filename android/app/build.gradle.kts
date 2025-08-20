@@ -8,7 +8,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.my_app"
+    namespace = "com.technova.skyscan"
     compileSdk = 35 // Make sure this is >= targetSdk of Firebase plugins
 
     // ✅ Use NDK version required by plugins
@@ -24,7 +24,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.my_app"
+        applicationId = "com.technova.skyscan"
         // ✅ Update minSdk to match Firebase library requirements
         minSdk = 23
         targetSdk = 35

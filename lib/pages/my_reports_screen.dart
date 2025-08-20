@@ -1,5 +1,6 @@
 
 import 'package:flutter/material.dart';
+import '../widgets/app_header.dart';
 
 class MyReportsScreen extends StatelessWidget {
   const MyReportsScreen({super.key});
@@ -11,6 +12,8 @@ class MyReportsScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          const AppHeader(),
+          const SizedBox(height: 24),
           const Text(
             'My Reports',
             style: TextStyle(

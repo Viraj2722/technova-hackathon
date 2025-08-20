@@ -1,6 +1,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../widgets/app_header.dart';
 
 
 class ProfileScreen extends StatelessWidget {
@@ -23,6 +24,8 @@ class ProfileScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          const AppHeader(),
+          const SizedBox(height: 24),
           const Text(
             'Profile & Settings',
             style: TextStyle(
