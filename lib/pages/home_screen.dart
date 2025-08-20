@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'dart:io';
+import 'package:image_picker/image_picker.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../widgets/app_header.dart';
+import './camera-screen.dart';
 
 
 // HomeScreen Widget
@@ -58,11 +61,45 @@ class HomeScreen extends StatelessWidget {
             ),
             const SizedBox(height: 24),
             // Report Button
+            // Report Button
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: () {
-                  // TODO: Implement report flow
+                onPressed: () async {
+                  // Request permissions
+                  await [Permission.camera, Permission.location].request();
+                  final cameraStatus = await Permission.camera.status;
+                  if (!cameraStatus.isGranted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Camera permission is required to take photos')),
+                    );
+                    return;
+                  }
+                  final picker = ImagePicker();
+                  final XFile? image = await picker.pickImage(
+                    source: ImageSource.camera,
+                    imageQuality: 85,
+                    preferredCameraDevice: CameraDevice.rear,
+                  );
+                  if (image != null) {
+                    // Get current location
+                    Position? position;
+                    try {
+                      final locationStatus = await Permission.location.status;
+                      if (locationStatus.isGranted) {
+                        position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+                      }
+                    } catch (_) {}
+                    if (!context.mounted) return;
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => ReportConfirmationScreen(
+                          imageFile: File(image.path),
+                          position: position,
+                        ),
+                      ),
+                    );
+                  }
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.blue[600],

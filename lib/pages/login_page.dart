@@ -165,28 +165,6 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
-  Future<void> _storeUserDataInSupabase({
-    required String firebaseUid,
-    required String email,
-    required String username,
-    required String fullName,
-    required String phone,
-    required String authProvider,
-  }) async {
-    try {
-      await supabaseClient.from('users').upsert({
-        'firebase_uid': firebaseUid,
-        'email': email,
-        'username': username,
-        'full_name': fullName,
-        'phone': phone,
-        'auth_provider': authProvider,
-        'created_at': DateTime.now().toIso8601String(),
-      });
-    } catch (e) {
-      print('Error storing user data in Supabase: $e');
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
