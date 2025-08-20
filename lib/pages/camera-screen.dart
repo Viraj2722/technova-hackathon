@@ -305,8 +305,6 @@ class ReportConfirmationScreen extends StatefulWidget {
 class _ReportConfirmationScreenState extends State<ReportConfirmationScreen> {
   String? selectedReason;
   final List<String> reasons = [
-    'No Permit / Unauthorized Billboard',
-    'Expired License / Permit',
     'Wrong Location (Non-designated Area)',
     'Oversized Billboard (Exceeds Allowed Dimensions)',
     'Obstructing Traffic Signs / View',
