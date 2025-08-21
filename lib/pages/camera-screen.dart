@@ -3,6 +3,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'dart:io';
+import 'package:http/http.dart' as http;
 
 // Camera Screen Widget
 class CameraScreen extends StatefulWidget {
@@ -28,6 +29,9 @@ class _CameraScreenState extends State<CameraScreen> {
       Permission.location,
     ].request();
   }
+
+  // Example: Replace with your actual user ID retrieval logic
+  final String userId = '3338bc13-72ba-41ba-9d91-f484628c5950';
 
   Future<void> _captureImage() async {
     setState(() {
@@ -77,6 +81,7 @@ class _CameraScreenState extends State<CameraScreen> {
               builder: (context) => ReportConfirmationScreen(
                 imageFile: File(image.path),
                 position: position,
+                userId: userId,
               ),
             ),
           );
@@ -290,11 +295,13 @@ class _CameraScreenState extends State<CameraScreen> {
 class ReportConfirmationScreen extends StatefulWidget {
   final File imageFile;
   final Position? position;
+  final String userId;
 
   const ReportConfirmationScreen({
     super.key,
     required this.imageFile,
     this.position,
+    required this.userId,
   });
 
   @override
@@ -503,8 +510,11 @@ class _ReportConfirmationScreenState extends State<ReportConfirmationScreen> {
     );
   }
 
-  void _submitReport() {
-    // Show loading state
+  // Add http package import at the top of the file:
+  // import 'package:http/http.dart' as http;
+
+  void _submitReport() async {
+    if (!mounted) return;
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -521,22 +531,65 @@ class _ReportConfirmationScreenState extends State<ReportConfirmationScreen> {
       },
     );
 
-    // Simulate API call delay
-    Future.delayed(const Duration(seconds: 2), () {
-      Navigator.of(context).pop(); // Close loading dialog
+    try {
+      final uri = Uri.parse('http://192.168.0.104:8000/analyze-image/');
+      final request = http.MultipartRequest('POST', uri);
 
-      // Navigate back to home and show success message
-      Navigator.of(context).pushNamedAndRemoveUntil(
-        '/', // Assuming '/' is your home route
-        (route) => false,
+      // Attach image file
+      request.files.add(
+        await http.MultipartFile.fromPath('image', widget.imageFile.path),
       );
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Report submitted successfully!'),
-          backgroundColor: Colors.green,
-        ),
-      );
-    });
+      // Attach location
+      if (widget.position != null) {
+        request.fields['gps_latitude'] = widget.position!.latitude.toString();
+        request.fields['gps_longitude'] = widget.position!.longitude.toString();
+      } else {
+        request.fields['gps_latitude'] = '';
+        request.fields['gps_longitude'] = '';
+      }
+
+      // Attach violation reason
+      request.fields['violation_reason'] = selectedReason ?? '';
+
+      // Attach user_id automatically
+      request.fields['user_id'] = widget.userId;
+
+      // Send request
+      final response = await request.send();
+
+      if (mounted) Navigator.of(context).pop(); // Close loading dialog
+
+      if (response.statusCode == 200) {
+        if (mounted) {
+          Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Report submitted successfully!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to submit report. Please try again.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) Navigator.of(context).pop(); // Close loading dialog
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 }

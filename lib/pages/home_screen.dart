@@ -96,6 +96,7 @@ class HomeScreen extends StatelessWidget {
                         builder: (context) => ReportConfirmationScreen(
                           imageFile: File(image.path),
                           position: position,
+                          userId: userId,
                         ),
                       ),
                     );
