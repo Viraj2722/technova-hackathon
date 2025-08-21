@@ -1,5 +1,7 @@
 # Miscellaneous
 *.class
+*.env
+android/app/build.gradle.kts
 *.log
 *.pyc
 *.swp
@@ -36,9 +38,10 @@ migrate_working_dir/
 # Symbolication related
 app.*.symbols
 
+
 # Obfuscation related
 app.*.map.json
-
+node_modules/
 # Android Studio will place build artifacts here
 /android/app/debug
 /android/app/profile
