@@ -5,11 +5,13 @@ import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../widgets/app_header.dart';
 import './camera-screen.dart';
+import '../services/user_service.dart';
 
-
-// HomeScreen Widget
+// HomeScreen Widget - Now accepts userId as a parameter
 class HomeScreen extends StatelessWidget {
-  const HomeScreen({super.key});
+  final String? userId; // Add userId as a parameter
+
+  const HomeScreen({super.key, this.userId});
 
   @override
   Widget build(BuildContext context) {
@@ -61,44 +63,20 @@ class HomeScreen extends StatelessWidget {
             ),
             const SizedBox(height: 24),
             // Report Button
-            // Report Button
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: () async {
-                  // Request permissions
-                  await [Permission.camera, Permission.location].request();
-                  final cameraStatus = await Permission.camera.status;
-                  if (!cameraStatus.isGranted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Camera permission is required to take photos')),
-                    );
-                    return;
-                  }
-                  final picker = ImagePicker();
-                  final XFile? image = await picker.pickImage(
-                    source: ImageSource.camera,
-                    imageQuality: 85,
-                    preferredCameraDevice: CameraDevice.rear,
-                  );
-                  if (image != null) {
-                    // Get current location
-                    Position? position;
-                    try {
-                      final locationStatus = await Permission.location.status;
-                      if (locationStatus.isGranted) {
-                        position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
-                      }
-                    } catch (_) {}
-                    if (!context.mounted) return;
+                  final userId = await UserService.getCurrentSupabaseUserId();
+                  if (userId != null) {
                     Navigator.of(context).push(
                       MaterialPageRoute(
-                        builder: (context) => ReportConfirmationScreen(
-                          imageFile: File(image.path),
-                          position: position,
-                          userId: userId,
-                        ),
+                        builder: (context) => CameraScreen(userId: userId),
                       ),
+                    );
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Please log in to submit reports')),
                     );
                   }
                 },
@@ -139,16 +117,19 @@ class HomeScreen extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             // Recent Reports List
-            _buildReportItem('Marine Drive', 'Aug 15, 2025', 'Resolved', Colors.green),
+            _buildReportItem(
+                'Marine Drive', 'Aug 15, 2025', 'Resolved', Colors.green),
             const SizedBox(height: 12),
-            _buildReportItem('Bandra West', 'Aug 12, 2025', 'Under Review', Colors.orange),
+            _buildReportItem(
+                'Bandra West', 'Aug 12, 2025', 'Under Review', Colors.orange),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildReportItem(String location, String date, String status, Color statusColor) {
+  Widget _buildReportItem(
+      String location, String date, String status, Color statusColor) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(

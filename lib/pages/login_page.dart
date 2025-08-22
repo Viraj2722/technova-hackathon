@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
+import '../services/user_service.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -43,16 +44,21 @@ class _LoginPageState extends State<LoginPage> {
         password: _passwordController.text.trim(),
       );
 
-      // Check if user exists in Supabase
-      final userExists = await _syncUserWithSupabase(userCredential.user!);
+      final supabaseUserId = await UserService.getSupabaseUserIdFromFirebase(
+          userCredential.user!.uid);
       
-      if (!userExists) {
+      if (supabaseUserId == null) {
         await firebase_auth.FirebaseAuth.instance.signOut();
         setState(() {
           _errorMessage = 'Account not found in our system. Please contact support.';
         });
         return;
       }
+
+      await UserService.saveUserIds(
+        supabaseUserId: supabaseUserId,
+        firebaseUid: userCredential.user!.uid,
+      );
 
       if (context.mounted) {
         Navigator.of(context).pushReplacementNamed('/main');

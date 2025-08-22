@@ -40,6 +40,7 @@ class MyApp extends StatelessWidget {
       ),
       initialRoute: '/login',
       routes: {
+        '/': (context) => const MainNavigation(), // <-- Add this line
         '/login': (context) => const LoginPage(),
         '/signup': (context) => const SignUpPage(),
         '/main': (context) => const MainNavigation(),

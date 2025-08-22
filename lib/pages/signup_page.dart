@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
 import 'dart:async';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
+import '../services/user_service.dart';
 
 class SignUpPage extends StatefulWidget {
   const SignUpPage({super.key});
@@ -157,11 +158,9 @@ class _SignUpPageState extends State<SignUpPage> {
       _isLoading = true;
       _errorMessage = null;
     });
-    try {
-      // Sign out any existing user first
-      await _googleSignIn.signOut();
 
-      // Trigger the authentication flow
+    try {
+      await _googleSignIn.signOut();
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
 
       if (googleUser == null) {
@@ -171,29 +170,41 @@ class _SignUpPageState extends State<SignUpPage> {
         return;
       }
 
-      // Obtain the auth details from the request
-      final GoogleSignInAuthentication googleAuth =
-          await googleUser.authentication;
-
-      // Create a new credential
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
       final credential = firebase_auth.GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
       );
 
-      // Sign in to Firebase with Google credentials
-      await firebase_auth.FirebaseAuth.instance
+      final userCredential = await firebase_auth.FirebaseAuth.instance
           .signInWithCredential(credential);
 
-      // Ask for phone input and complete sign up
+      final supabaseUserId = await UserService.getSupabaseUserIdFromFirebase(
+          userCredential.user!.uid);
+      
+      if (supabaseUserId == null) {
+        await firebase_auth.FirebaseAuth.instance.signOut();
+        await _googleSignIn.signOut();
+        
+        setState(() {
+          _errorMessage = 'Account not found. Please sign up first.';
+        });
+        return;
+      }
+
+      await UserService.saveUserIds(
+        supabaseUserId: supabaseUserId,
+        firebaseUid: userCredential.user!.uid,
+      );
+
       if (context.mounted) {
-        await _showPhoneInputDialog();
+        Navigator.of(context).pushReplacementNamed('/main');
       }
     } catch (e) {
       setState(() {
-        _errorMessage = 'Google sign in failed. Please try again.';
+        _errorMessage = 'Google sign-in failed. Please try again.';
       });
-      print('Google Sign In Error: $e');
+      print('Google Sign-In Error: $e');
     } finally {
       setState(() {
         _isLoading = false;
@@ -220,7 +231,6 @@ class _SignUpPageState extends State<SignUpPage> {
                     style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
-                  // ...existing code...
                   TextFormField(
                     controller: _fullNameController,
                     textCapitalization: TextCapitalization.words,
