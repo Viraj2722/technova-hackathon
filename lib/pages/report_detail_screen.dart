@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'my_reports_screen.dart';
+// import 'my_reports_screen.dart';
+import '../models/report.dart';
 
 class ReportDetailScreen extends StatefulWidget {
   final Report report;

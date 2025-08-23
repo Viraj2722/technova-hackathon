@@ -3,41 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../widgets/app_header.dart';
 import '../services/user_service.dart';
 import 'report_detail_screen.dart';
-
-class Report {
-  final int reportId; // <-- Change from String to int
-  final String imageUrl;
-  final double? gpsLatitude;
-  final double? gpsLongitude;
-  final DateTime timestamp;
-  final String status;
-  final String issue;
-  final String userId;
-
-  Report({
-    required this.reportId,
-    required this.imageUrl,
-    this.gpsLatitude,
-    this.gpsLongitude,
-    required this.timestamp,
-    required this.status,
-    required this.issue,
-    required this.userId,
-  });
-
-  factory Report.fromJson(Map<String, dynamic> json) {
-    return Report(
-      reportId: json['report_id'],
-      imageUrl: json['image_url'] ?? '',
-      gpsLatitude: json['gps_latitude']?.toDouble(),
-      gpsLongitude: json['gps_longitude']?.toDouble(),
-      timestamp: DateTime.parse(json['timestamp']), // Remove the fallback to 'created_at'
-      status: json['status'] ?? 'unknown',
-      issue: json['issue'] ?? 'No description',
-      userId: json['user_id'],
-    );
-  }
-}
+import '../models/report.dart';
 
 class MyReportsScreen extends StatefulWidget {
   const MyReportsScreen({super.key});

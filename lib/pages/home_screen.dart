@@ -1,49 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'dart:io';
-import 'package:image_picker/image_picker.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../widgets/app_header.dart';
 import './camera-screen.dart';
 import '../services/user_service.dart';
+import 'report_detail_screen.dart'; // <-- Add this import at the top
+import '../models/report.dart';
 
-// Report model (same as in MyReportsScreen)
-class Report {
-  final String reportId;
-  final String imageUrl;
-  final double? gpsLatitude;
-  final double? gpsLongitude;
-  final DateTime timestamp;
-  final String status;
-  final String issue;
-  final String? userId;
-
-  Report({
-    required this.reportId,
-    required this.imageUrl,
-    this.gpsLatitude,
-    this.gpsLongitude,
-    required this.timestamp,
-    required this.status,
-    required this.issue,
-    this.userId,
-  });
-
-  factory Report.fromJson(Map<String, dynamic> json) {
-    return Report(
-      reportId: json['report_id'],
-      imageUrl: json['image_url'] ?? '',
-      gpsLatitude: json['gps_latitude']?.toDouble(),
-      gpsLongitude: json['gps_longitude']?.toDouble(),
-      timestamp: DateTime.parse(json['timestamp']),
-      status: json['status'] ?? 'unknown',
-      issue: json['issue'] ?? 'No description',
-      userId: json['user_id'],
-    );
-  }
-}
 
 // HomeScreen Widget - Now accepts userId as a parameter
 class HomeScreen extends StatefulWidget {
@@ -71,8 +36,9 @@ class _HomeScreenState extends State<HomeScreen> {
         _isLoadingReports = true;
       });
 
+      // Fetch only 2 most recent reports, ordered by timestamp descending
       final response = await http.get(
-        Uri.parse('http://192.168.0.103:8000//reports/'),
+        Uri.parse('http://192.168.0.103:8000/reports/?limit=2'),
       );
 
       if (response.statusCode == 200) {
@@ -90,7 +56,6 @@ class _HomeScreenState extends State<HomeScreen> {
         });
       }
     } catch (e) {
-      // Silently handle error for recent reports section
       print('Failed to load recent reports: $e');
     } finally {
       setState(() {
@@ -292,93 +257,67 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildReportItem(Report report) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey[300]!),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 64,
-            height: 64,
-            decoration: BoxDecoration(
-              color: Colors.grey[200],
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: report.imageUrl.isNotEmpty
-                  ? Image.network(
-                      report.imageUrl,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                        return const Icon(
-                          Icons.ad_units,
-                          color: Colors.grey,
-                          size: 32,
-                        );
-                      },
-                      loadingBuilder: (context, child, loadingProgress) {
-                        if (loadingProgress == null) return child;
-                        return const Center(
-                          child: SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                        );
-                      },
-                    )
-                  : const Icon(
-                      Icons.ad_units,
-                      color: Colors.grey,
-                      size: 32,
+    // Minimalistic: Only location, date, status
+    return GestureDetector(
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (context) => ReportDetailScreen(report: report),
+          ),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+        margin: const EdgeInsets.symmetric(vertical: 2),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.grey[200]!),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.location_on, color: Colors.blue[400], size: 22),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _formatLocation(report.gpsLatitude, report.gpsLongitude),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black87,
+                      fontSize: 14,
                     ),
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _formatLocation(report.gpsLatitude, report.gpsLongitude),
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    color: Colors.black87,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  _formatDate(report.timestamp),
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[600],
+                  Text(
+                    _formatDate(report.timestamp),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[600],
+                    ),
                   ),
-                ),
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-            decoration: BoxDecoration(
-              color: _getStatusColor(report.status).withOpacity(0.1),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              _capitalizeStatus(report.status),
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: _getStatusColor(report.status),
+                ],
               ),
             ),
-          ),
-        ],
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: _getStatusColor(report.status).withOpacity(0.12),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Text(
+                _capitalizeStatus(report.status),
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: _getStatusColor(report.status),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
