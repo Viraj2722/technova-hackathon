@@ -527,6 +527,34 @@ async def test_upload(image: UploadFile = File(...)):
 async def root():
     return {"message": "Billboard Reporting API is running"}
 
+# NEW: Get count of reports for the current month
+@app.get("/reports/count/month")
+async def get_monthly_report_count():
+    """Get count of reports for the current month"""
+    try:
+        now = datetime.utcnow()
+        start_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        result = supabase.table("reports") \
+            .select("report_id", count="exact") \
+            .gte("timestamp", start_of_month.isoformat()) \
+            .execute()
+        return {"count": result.count or 0}
+    except Exception as e:
+        return {"count": 0, "error": str(e)}
+
+# NEW: Get count of reports with status 'approved'
+@app.get("/reports/count/resolved")
+async def get_resolved_report_count():
+    """Get count of reports with status 'approved'"""
+    try:
+        result = supabase.table("reports") \
+            .select("report_id", count="exact") \
+            .eq("status", "approved") \
+            .execute()
+        return {"count": result.count or 0}
+    except Exception as e:
+        return {"count": 0, "error": str(e)}
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
