@@ -49,6 +49,7 @@ This project is a Flutter app and FastAPI backend for reporting non-compliant bi
 3. **Run the backend server:**
    ```sh
    uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+   python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
    ```
    - Make sure your firewall allows port 8000.
    - The server should be accessible at `http://<your-ip>:8000` from your local network.
