@@ -3,15 +3,151 @@ import 'package:geolocator/geolocator.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import '../widgets/app_header.dart';
 import './camera-screen.dart';
 import '../services/user_service.dart';
 
+// Report model (same as in MyReportsScreen)
+class Report {
+  final String reportId;
+  final String imageUrl;
+  final double? gpsLatitude;
+  final double? gpsLongitude;
+  final DateTime timestamp;
+  final String status;
+  final String issue;
+  final String? userId;
+
+  Report({
+    required this.reportId,
+    required this.imageUrl,
+    this.gpsLatitude,
+    this.gpsLongitude,
+    required this.timestamp,
+    required this.status,
+    required this.issue,
+    this.userId,
+  });
+
+  factory Report.fromJson(Map<String, dynamic> json) {
+    return Report(
+      reportId: json['report_id'],
+      imageUrl: json['image_url'] ?? '',
+      gpsLatitude: json['gps_latitude']?.toDouble(),
+      gpsLongitude: json['gps_longitude']?.toDouble(),
+      timestamp: DateTime.parse(json['timestamp']),
+      status: json['status'] ?? 'unknown',
+      issue: json['issue'] ?? 'No description',
+      userId: json['user_id'],
+    );
+  }
+}
+
 // HomeScreen Widget - Now accepts userId as a parameter
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   final String? userId; // Add userId as a parameter
 
   const HomeScreen({super.key, this.userId});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  List<Report> _recentReports = [];
+  bool _isLoadingReports = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchRecentReports();
+  }
+
+  Future<void> _fetchRecentReports() async {
+    try {
+      setState(() {
+        _isLoadingReports = true;
+      });
+
+      final response = await http.get(
+        Uri.parse('http://192.168.6.99:8000/reports/'),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final List<dynamic> reportsJson = data['reports'] ?? [];
+
+        List<Report> allReports =
+            reportsJson.map((json) => Report.fromJson(json)).toList();
+
+        // Sort by timestamp (newest first) and take only latest 2
+        allReports.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+
+        setState(() {
+          _recentReports = allReports.take(2).toList();
+        });
+      }
+    } catch (e) {
+      // Silently handle error for recent reports section
+      print('Failed to load recent reports: $e');
+    } finally {
+      setState(() {
+        _isLoadingReports = false;
+      });
+    }
+  }
+
+  String _formatDate(DateTime date) {
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec'
+    ];
+    return '${months[date.month - 1]} ${date.day}, ${date.year}';
+  }
+
+  String _formatLocation(double? lat, double? lng) {
+    if (lat == null || lng == null) {
+      return 'Location unavailable';
+    }
+    // Simple location format for recent reports
+    return '${lat.toStringAsFixed(4)}°N, ${lng.toStringAsFixed(4)}°E';
+  }
+
+  Color _getStatusColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'resolved':
+        return Colors.green;
+      case 'under review':
+        return Colors.orange;
+      case 'rejected':
+        return Colors.red;
+      case 'in progress':
+        return Colors.blue;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  String _capitalizeStatus(String status) {
+    return status
+        .split(' ')
+        .map((word) => word.isEmpty
+            ? word
+            : word[0].toUpperCase() + word.substring(1).toLowerCase())
+        .join(' ');
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -76,7 +212,8 @@ class HomeScreen extends StatelessWidget {
                     );
                   } else {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Please log in to submit reports')),
+                      const SnackBar(
+                          content: Text('Please log in to submit reports')),
                     );
                   }
                 },
@@ -117,19 +254,45 @@ class HomeScreen extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             // Recent Reports List
-            _buildReportItem(
-                'Marine Drive', 'Aug 15, 2025', 'Resolved', Colors.green),
-            const SizedBox(height: 12),
-            _buildReportItem(
-                'Bandra West', 'Aug 12, 2025', 'Under Review', Colors.orange),
+            if (_isLoadingReports) ...[
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(16),
+                  child: CircularProgressIndicator(),
+                ),
+              ),
+            ] else if (_recentReports.isEmpty) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.grey[50],
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.grey[200]!),
+                ),
+                child: Text(
+                  'No recent reports found',
+                  style: TextStyle(
+                    color: Colors.grey[600],
+                    fontSize: 14,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ] else ...[
+              // Display recent reports
+              for (int i = 0; i < _recentReports.length; i++) ...[
+                _buildReportItem(_recentReports[i]),
+                if (i < _recentReports.length - 1) const SizedBox(height: 12),
+              ],
+            ],
           ],
         ),
       ),
     );
   }
 
-  Widget _buildReportItem(
-      String location, String date, String status, Color statusColor) {
+  Widget _buildReportItem(Report report) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -146,10 +309,35 @@ class HomeScreen extends StatelessWidget {
               color: Colors.grey[200],
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Icon(
-              Icons.ad_units,
-              color: Colors.grey,
-              size: 32,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: report.imageUrl.isNotEmpty
+                  ? Image.network(
+                      report.imageUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return const Icon(
+                          Icons.ad_units,
+                          color: Colors.grey,
+                          size: 32,
+                        );
+                      },
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return const Center(
+                          child: SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        );
+                      },
+                    )
+                  : const Icon(
+                      Icons.ad_units,
+                      color: Colors.grey,
+                      size: 32,
+                    ),
             ),
           ),
           const SizedBox(width: 16),
@@ -158,15 +346,16 @@ class HomeScreen extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  location,
+                  _formatLocation(report.gpsLatitude, report.gpsLongitude),
                   style: const TextStyle(
                     fontWeight: FontWeight.w600,
                     color: Colors.black87,
                   ),
+                  overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  date,
+                  _formatDate(report.timestamp),
                   style: TextStyle(
                     fontSize: 12,
                     color: Colors.grey[600],
@@ -178,15 +367,15 @@ class HomeScreen extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
             decoration: BoxDecoration(
-              color: statusColor.withOpacity(0.1),
+              color: _getStatusColor(report.status).withOpacity(0.1),
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text(
-              status,
+              _capitalizeStatus(report.status),
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
-                color: statusColor,
+                color: _getStatusColor(report.status),
               ),
             ),
           ),
@@ -196,7 +385,7 @@ class HomeScreen extends StatelessWidget {
   }
 }
 
-// Report Confirmation Sheet Widget
+// Report Confirmation Sheet Widget (unchanged)
 class ReportConfirmationSheet extends StatefulWidget {
   final File imageFile;
   final Position? position;
