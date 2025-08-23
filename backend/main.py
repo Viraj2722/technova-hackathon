@@ -12,6 +12,7 @@ import subprocess
 import glob
 import shutil
 import re
+import tempfile
 
 # Load environment
 load_dotenv()
@@ -44,7 +45,7 @@ os.makedirs(static_dir, exist_ok=True)
 os.makedirs(croppedresult_dir, exist_ok=True)
 os.makedirs(temp_uploads_dir, exist_ok=True)
 
-# Mount static directory
+# Mount static directory (keep for local development/testing)
 app.mount("/croppedresult", StaticFiles(directory=croppedresult_dir), name="croppedresult")
 
 # Load YOLO model
@@ -54,17 +55,15 @@ model = YOLO(MODEL_PATH)
 def get_next_billboard_number():
     """Get the next billboard number for sequential naming"""
     try:
-        # Get all existing billboard files
-        existing_files = glob.glob(os.path.join(croppedresult_dir, "billboard*.png")) + \
-                         glob.glob(os.path.join(croppedresult_dir, "billboard*.jpg"))
-        
-        if not existing_files:
+        # Check Supabase storage for existing files
+        result = supabase.storage.from_('images').list()
+        if not result:
             return 1
         
         # Extract numbers from existing files
         numbers = []
-        for file in existing_files:
-            filename = os.path.basename(file)
+        for file_info in result:
+            filename = file_info['name']
             match = re.search(r'billboard.*?(\d+)', filename)
             if match:
                 numbers.append(int(match.group(1)))
@@ -72,8 +71,61 @@ def get_next_billboard_number():
         return max(numbers) + 1 if numbers else 1
         
     except Exception as e:
-        print(f"Error getting next billboard number: {e}")
-        return 1
+        print(f"Error getting next billboard number from Supabase: {e}")
+        # Fallback to local check
+        try:
+            existing_files = glob.glob(os.path.join(croppedresult_dir, "billboard*.png")) + \
+                             glob.glob(os.path.join(croppedresult_dir, "billboard*.jpg"))
+            
+            if not existing_files:
+                return 1
+            
+            numbers = []
+            for file in existing_files:
+                filename = os.path.basename(file)
+                match = re.search(r'billboard.*?(\d+)', filename)
+                if match:
+                    numbers.append(int(match.group(1)))
+            
+            return max(numbers) + 1 if numbers else 1
+        except:
+            return 1
+
+def upload_image_to_supabase(file_path: str, filename: str) -> str:
+    """Upload image to Supabase Storage and return public URL"""
+    try:
+        print(f"Attempting to upload {filename} to Supabase Storage...")
+        
+        # Read the file
+        with open(file_path, 'rb') as f:
+            file_data = f.read()
+        
+        print(f"File size: {len(file_data)} bytes")
+        
+        # Upload to Supabase Storage
+        try:
+            result = supabase.storage.from_('images').upload(filename, file_data)
+            print(f"Upload result: {result}")
+            
+            if result:
+                # Get public URL
+                public_url = supabase.storage.from_('images').get_public_url(filename)
+                print(f"Image uploaded successfully. Public URL: {public_url}")
+                return public_url
+            else:
+                raise Exception("Upload result was None or empty")
+                
+        except Exception as upload_error:
+            print(f"Detailed upload error: {upload_error}")
+            print(f"Error type: {type(upload_error)}")
+            raise upload_error
+            
+    except Exception as e:
+        print(f"Error uploading image to Supabase Storage: {e}")
+        print(f"Error type: {type(e)}")
+        import traceback
+        traceback.print_exc()
+        raise e
 
 @app.post("/analyze-image/")
 async def analyze_image(
@@ -104,47 +156,43 @@ async def analyze_image(
         next_billboard_num = get_next_billboard_number()
         print(f"Next billboard number: {next_billboard_num}")
 
-        # Run YOLO model and save directly to static/croppedresult/
-        subprocess.run([
-            "python",
-            os.path.join(backend_dir, "test_model.py"),
-            temp_path,
-            croppedresult_dir
-        ], check=True)
+        # Run YOLO model and save to temporary directory
+        with tempfile.TemporaryDirectory() as temp_output_dir:
+            subprocess.run([
+                "python",
+                os.path.join(backend_dir, "test_model.py"),
+                temp_path,
+                temp_output_dir
+            ], check=True)
 
-        # Find the cropped image in output_dir
-        found_files = glob.glob(os.path.join(croppedresult_dir, "*.png")) + glob.glob(os.path.join(croppedresult_dir, "*.jpg"))
-        print("Found cropped files:", found_files)
+            # Find the cropped image in temp output directory
+            found_files = glob.glob(os.path.join(temp_output_dir, "*.png")) + \
+                         glob.glob(os.path.join(temp_output_dir, "*.jpg"))
+            print("Found cropped files:", found_files)
 
-        if not found_files:
-            return JSONResponse(content={"error": "No cropped image found."}, status_code=500)
+            if not found_files:
+                return JSONResponse(content={"error": "No cropped image found."}, status_code=500)
 
-        # Get the most recent file (in case there are multiple detections)
-        cropped_path = max(found_files, key=os.path.getctime)
-        
-        # Create new filename with sequential numbering
-        file_extension = os.path.splitext(cropped_path)[1]
-        new_filename = f"billboard{next_billboard_num}{file_extension}"
-        new_cropped_path = os.path.join(croppedresult_dir, new_filename)
-        
-        # Rename the file to the sequential name
-        if cropped_path != new_cropped_path:
-            shutil.move(cropped_path, new_cropped_path)
-            print(f"Renamed {cropped_path} to {new_cropped_path}")
-        
-        # Clean up any other temporary cropped files
-        temp_cropped_files = glob.glob(os.path.join(croppedresult_dir, "cropped_billboard_*.png")) + \
-                             glob.glob(os.path.join(croppedresult_dir, "cropped_billboard_*.jpg"))
-        for temp_file in temp_cropped_files:
-            if temp_file != new_cropped_path:
-                try:
-                    os.remove(temp_file)
-                    print(f"Cleaned up temporary file: {temp_file}")
-                except:
-                    pass
-
-        image_url = f"/croppedresult/{new_filename}"
-        print(f"Using renamed image: {new_filename}")
+            # Get the most recent file (in case there are multiple detections)
+            cropped_path = max(found_files, key=os.path.getctime)
+            
+            # Create filename with sequential numbering
+            file_extension = os.path.splitext(cropped_path)[1]
+            filename = f"billboard{next_billboard_num}{file_extension}"
+            
+            print(f"Uploading image as: {filename}")
+            
+            # Upload to Supabase Storage
+            try:
+                public_url = upload_image_to_supabase(cropped_path, filename)
+                print(f"Image uploaded to Supabase Storage: {public_url}")
+            except Exception as upload_error:
+                print(f"Failed to upload to Supabase Storage: {upload_error}")
+                # Fallback to local storage
+                local_cropped_path = os.path.join(croppedresult_dir, filename)
+                shutil.copy2(cropped_path, local_cropped_path)
+                public_url = f"http://192.168.6.99:8000/croppedresult/{filename}"
+                print(f"Fallback: Saved locally at {public_url}")
 
         # Convert GPS coordinates to float, handle empty strings
         try:
@@ -194,11 +242,11 @@ async def analyze_image(
         
         report_data = {
             "report_id": report_id,
-            "image_url": image_url,
+            "image_url": public_url,  # Now contains Supabase Storage URL
             "timestamp": timestamp,
             "status": status,
             "issue": violation_reason,
-            "user_id": parsed_user_id  # This can be None for anonymous reports
+            "user_id": parsed_user_id
         }
         
         # Only add GPS coordinates if they are valid
@@ -218,14 +266,9 @@ async def analyze_image(
             os.remove(temp_path)
             print(f"Cleaned up temporary file: {temp_path}")
 
-        # Return the full server URL for the image
-        server_base_url = "http://192.168.6.99:8000"  # Update this to match your server IP
-        full_image_url = f"{server_base_url}{image_url}"
-        
         response_data = {
             "report_id": report_id,
-            "image_url": full_image_url,
-            "local_image_url": image_url,
+            "image_url": public_url,  # Supabase Storage URL
             "billboard_number": next_billboard_num,
             "gps_latitude": lat,
             "gps_longitude": lng,
@@ -271,14 +314,47 @@ async def create_test_user():
     except Exception as e:
         return JSONResponse(content={"error": f"Failed to create test user: {str(e)}"}, status_code=500)
 
+# Get reports by user ID endpoint
+@app.get("/reports/user/{user_id}")
+async def get_user_reports(user_id: str):
+    try:
+        result = supabase.table("reports").select("*").eq("user_id", user_id).order("timestamp", desc=True).execute()
+        return JSONResponse(content={"reports": result.data})
+    except Exception as e:
+        return JSONResponse(content={"error": f"Failed to fetch user reports: {str(e)}"}, status_code=500)
+
 # Get all reports endpoint
 @app.get("/reports/")
 async def get_reports():
     try:
-        result = supabase.table("reports").select("*").execute()
+        result = supabase.table("reports").select("*").order("timestamp", desc=True).execute()
         return JSONResponse(content={"reports": result.data})
     except Exception as e:
         return JSONResponse(content={"error": f"Failed to fetch reports: {str(e)}"}, status_code=500)
+
+# Test endpoint to upload image directly to Supabase Storage
+@app.post("/test-upload/")
+async def test_upload(image: UploadFile = File(...)):
+    try:
+        # Save uploaded image temporarily
+        temp_path = os.path.join(temp_uploads_dir, image.filename)
+        with open(temp_path, "wb") as f:
+            f.write(await image.read())
+        
+        # Upload to Supabase Storage
+        filename = f"test_{uuid.uuid4()}{os.path.splitext(image.filename)[1]}"
+        public_url = upload_image_to_supabase(temp_path, filename)
+        
+        # Clean up
+        os.remove(temp_path)
+        
+        return JSONResponse(content={
+            "message": "Image uploaded successfully",
+            "public_url": public_url,
+            "filename": filename
+        })
+    except Exception as e:
+        return JSONResponse(content={"error": f"Upload failed: {str(e)}"}, status_code=500)
 
 @app.get("/")
 async def root():

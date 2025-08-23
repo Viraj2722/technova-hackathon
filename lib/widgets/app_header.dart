@@ -9,34 +9,69 @@ class AppHeader extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 20),
       decoration: BoxDecoration(
-        color: Colors.blue[50],
+        color: const Color(0xFF1A1A1A), // Dark background like the logo
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
+            color: Colors.black.withOpacity(0.3),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
       child: Row(
         children: [
+          // Custom icon that resembles the Skyscan logo
           Container(
             width: 48,
-            height: 10,
+            height: 48,
             decoration: BoxDecoration(
-              color: Colors.blue[100],
-              borderRadius: BorderRadius.circular(12),
+              color: Colors.white.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
             ),
-            child: const Icon(Icons.cloud, color: Colors.blue, size: 32),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                // Monitor/screen part
+                Container(
+                  width: 28,
+                  height: 20,
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.white, width: 2),
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                ),
+                // Stand/legs
+                Positioned(
+                  bottom: 8,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 3,
+                        height: 8,
+                        color: Colors.white,
+                      ),
+                      const SizedBox(width: 6),
+                      Container(
+                        width: 3,
+                        height: 8,
+                        color: Colors.white,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
           const SizedBox(width: 16),
           const Text(
-            'SkyScan',
+            'Skyscan',
             style: TextStyle(
-              fontSize: 23,
+              fontSize: 24,
               fontWeight: FontWeight.bold,
-              color: Colors.blue,
+              color: Colors.white,
+              letterSpacing: 0.5,
             ),
           ),
         ],

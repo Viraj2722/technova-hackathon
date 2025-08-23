@@ -9,7 +9,7 @@ plugins {
 
 android {
     namespace = "com.technova.skyscan"
-    compileSdk = 35 // Make sure this is >= targetSdk of Firebase plugins
+    compileSdk = 36 // Make sure this is >= targetSdk of Firebase plugins
 
     // ✅ Use NDK version required by plugins
     ndkVersion = "27.3.13750724"
@@ -26,8 +26,8 @@ android {
     defaultConfig {
         applicationId = "com.technova.skyscan"
         // ✅ Update minSdk to match Firebase library requirements
-        minSdk = 23
-        targetSdk = 35
+        minSdkVersion(flutter.minSdkVersion)
+        targetSdk = 36
         versionCode = 1
         versionName = "1.0"
     }
