@@ -72,7 +72,7 @@ class _HomeScreenState extends State<HomeScreen> {
       });
 
       final response = await http.get(
-        Uri.parse('http://192.168.6.99:8000/reports/'),
+        Uri.parse('http://192.168.0.103:8000//reports/'),
       );
 
       if (response.statusCode == 200) {
@@ -203,18 +203,17 @@ class _HomeScreenState extends State<HomeScreen> {
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: () async {
-                  final userId = await UserService.getCurrentSupabaseUserId();
-                  if (userId != null) {
-                    Navigator.of(context).push(
+                  final supabaseUserId = await UserService.getCurrentSupabaseUserId();
+                  if (supabaseUserId != null) {
+                    Navigator.push(
+                      context,
                       MaterialPageRoute(
-                        builder: (context) => CameraScreen(userId: userId),
+                        builder: (context) => CameraScreen(userId: supabaseUserId),
                       ),
                     );
                   } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                          content: Text('Please log in to submit reports')),
-                    );
+                    // Handle user not logged in
+                    Navigator.pushNamed(context, '/login');
                   }
                 },
                 style: ElevatedButton.styleFrom(

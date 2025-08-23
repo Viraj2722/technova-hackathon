@@ -64,6 +64,7 @@ class _SignUpPageState extends State<SignUpPage> {
       Navigator.of(context).pushReplacementNamed('/main');
     }
   }
+
   Future<void> _storeUserDataInSupabase({
     required String firebaseUid,
     required String email,
@@ -73,19 +74,27 @@ class _SignUpPageState extends State<SignUpPage> {
     required String authProvider,
   }) async {
     try {
-      await supabaseClient.from('users').upsert({
+      // Use INSERT with SELECT to get the generated UUID
+      final response = await supabaseClient.from('users').insert({
         'firebase_uid': firebaseUid,
         'email': email,
         'username': username,
         'full_name': fullName,
         'phone': phone,
         'auth_provider': authProvider,
-        // created_at and updated_at are handled by DB defaults
-      });
+      }).select('id').single();
+
+      // Save the Supabase UUID locally
+      await UserService.saveUserIds(
+        supabaseUserId: response['id'],
+        firebaseUid: firebaseUid,
+      );
     } catch (e) {
       print('Error storing user data in Supabase: $e');
+      rethrow;
     }
   }
+
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
@@ -181,14 +190,11 @@ class _SignUpPageState extends State<SignUpPage> {
 
       final supabaseUserId = await UserService.getSupabaseUserIdFromFirebase(
           userCredential.user!.uid);
-      
+
       if (supabaseUserId == null) {
-        await firebase_auth.FirebaseAuth.instance.signOut();
-        await _googleSignIn.signOut();
-        
-        setState(() {
-          _errorMessage = 'Account not found. Please sign up first.';
-        });
+        // User does not exist in Supabase, so create user (sign up flow)
+        await _showPhoneInputDialog();
+        // _showPhoneInputDialog will call _completeGoogleSignUp after dialog
         return;
       }
 
@@ -395,3 +401,4 @@ class _SignUpPageState extends State<SignUpPage> {
     );
   }
 }
+

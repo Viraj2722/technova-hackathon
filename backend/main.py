@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, Form
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -134,68 +134,56 @@ async def analyze_image(
     gps_latitude: str = Form(""),
     gps_longitude: str = Form(""),
     violation_reason: str = Form(...),
-    user_id: str = Form(...)
+    user_id: str = Form(...)  # This should be Supabase UUID
 ):
     try:
-        print(f"Received request:")
-        print(f"- GPS Latitude: {gps_latitude}")
-        print(f"- GPS Longitude: {gps_longitude}")
-        print(f"- Violation Reason: {violation_reason}")
-        print(f"- User ID: {user_id}")
-        print(f"- Image filename: {image.filename}")
+        print(f"Received request for user: {user_id}")
+
+        # Validate user_id format and existence
+        try:
+            validated_uuid = str(uuid.UUID(user_id))
+            # Check if user exists in database
+            user_check = supabase.table("users").select("id").eq("id", validated_uuid).execute()
+            if not user_check.data:
+                raise HTTPException(status_code=400, detail="User not found")
+            print(f"Valid user confirmed: {validated_uuid}")
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid user ID format")
 
         # Save uploaded image temporarily
-        if not isinstance(image.filename, str):
-            raise ValueError("image.filename must be a string")
-        temp_path = os.path.join(temp_uploads_dir, image.filename)
+        temp_path = os.path.join(temp_uploads_dir, f"temp_{uuid.uuid4()}{os.path.splitext(image.filename)[1]}")
         with open(temp_path, "wb") as f:
             f.write(await image.read())
 
-        print(f"Saved temporary image to: {temp_path}")
-
-        # Get the next billboard number for sequential naming
-        next_billboard_num = get_next_billboard_number()
-        print(f"Next billboard number: {next_billboard_num}")
-
-        # Run YOLO model and save to temporary directory
+        # Process image with YOLO
         with tempfile.TemporaryDirectory() as temp_output_dir:
+            vis_path = os.path.join(temp_output_dir, "billboard_vis.png")
             subprocess.run([
-                "python",
-                os.path.join(backend_dir, "test_model.py"),
-                temp_path,
-                temp_output_dir
+                "python", "-c",
+                (
+                    "from ultralytics import YOLO; "
+                    "import sys; "
+                    "from PIL import Image; "
+                    "model=YOLO(r'{}'); "
+                    "results=model(r'{}'); "
+                    "im=results[0].plot(); "
+                    "Image.fromarray(im).save(r'{}')"
+                ).format(MODEL_PATH.replace('\\', '\\\\'), temp_path.replace('\\', '\\\\'), vis_path.replace('\\', '\\\\'))
             ], check=True)
 
-            # Find the cropped image in temp output directory
-            found_files = glob.glob(os.path.join(temp_output_dir, "*.png")) + \
-                         glob.glob(os.path.join(temp_output_dir, "*.jpg"))
-            print("Found cropped files:", found_files)
+            # Generate filename for storage
+            next_billboard_num = get_next_billboard_number()
+            filename = f"billboard{next_billboard_num}.png"
 
-            if not found_files:
-                return JSONResponse(content={"error": "No cropped image found."}, status_code=500)
-
-            # Get the most recent file (in case there are multiple detections)
-            cropped_path = max(found_files, key=os.path.getctime)
-            
-            # Create filename with sequential numbering
-            file_extension = os.path.splitext(cropped_path)[1]
-            filename = f"billboard{next_billboard_num}{file_extension}"
-            
-            print(f"Uploading image as: {filename}")
-            
-            # Upload to Supabase Storage
+            # Upload to Supabase Storage images bucket
             try:
-                public_url = upload_image_to_supabase(cropped_path, filename)
+                public_url = upload_image_to_supabase(vis_path, filename)
                 print(f"Image uploaded to Supabase Storage: {public_url}")
             except Exception as upload_error:
-                print(f"Failed to upload to Supabase Storage: {upload_error}")
-                # Fallback to local storage
-                local_cropped_path = os.path.join(croppedresult_dir, filename)
-                shutil.copy2(cropped_path, local_cropped_path)
-                public_url = f"http://192.168.6.99:8000/croppedresult/{filename}"
-                print(f"Fallback: Saved locally at {public_url}")
+                print(f"Failed to upload to Supabase: {upload_error}")
+                raise HTTPException(status_code=500, detail="Failed to upload image")
 
-        # Convert GPS coordinates to float, handle empty strings
+        # Process GPS coordinates
         try:
             lat = float(gps_latitude) if gps_latitude.strip() else None
             lng = float(gps_longitude) if gps_longitude.strip() else None
@@ -203,64 +191,37 @@ async def analyze_image(
             lat = None
             lng = None
 
-        print(f"Processed coordinates: lat={lat}, lng={lng}")
-
-        # Handle user_id - improved validation and user creation if needed
-        parsed_user_id = None
-        if user_id and user_id.strip() and user_id != 'anonymous':
-            try:
-                # First check if it's a valid UUID format
-                validated_uuid = str(uuid.UUID(user_id))
-                
-                # Check if user exists in database
-                user_check = supabase.table("users").select("id").eq("id", validated_uuid).execute()
-                if user_check.data:
-                    parsed_user_id = validated_uuid
-                    print(f"Using existing user_id: {parsed_user_id}")
-                else:
-                    print(f"User {validated_uuid} not found in database")
-                    parsed_user_id = None
-            except ValueError:
-                print(f"Invalid UUID format for user_id: {user_id}")
-                try:
-                    user_check = supabase.table("users").select("id").eq("firebase_uid", user_id).execute()
-                    if user_check.data:
-                        parsed_user_id = user_check.data[0]["id"]
-                        print(f"Found user by firebase_uid: {parsed_user_id}")
-                    else:
-                        parsed_user_id = None
-                        print(f"No user found with firebase_uid: {user_id}")
-                except Exception as e:
-                    print(f"Error checking firebase_uid: {e}")
-                    parsed_user_id = None
-        else:
-            print("Anonymous or empty user_id, setting to None")
-
-        # Prepare data for Supabase
-        report_id = str(uuid.uuid4())
+        # Prepare report data - REMOVE report_id as it's auto-generated
         timestamp = datetime.utcnow().isoformat()
-        status = "under review"
-        
         report_data = {
-            "report_id": report_id,
-            "image_url": public_url,  # Now contains Supabase Storage URL
+            "image_url": public_url,
             "timestamp": timestamp,
-            "status": status,
+            "status": "under review",
             "issue": violation_reason,
-            "user_id": parsed_user_id
+            "user_id": validated_uuid
+            # Don't include report_id - let it auto-increment
         }
-        
-        # Only add GPS coordinates if they are valid
+
         if lat is not None:
             report_data["gps_latitude"] = lat
         if lng is not None:
             report_data["gps_longitude"] = lng
 
-        print(f"Inserting report into Supabase: {report_data}")
+        # Insert into Supabase - let report_id auto-increment
+        insert_result = supabase.table("reports").insert(report_data).execute()
 
-        # Insert into Supabase
-        result = supabase.table("reports").insert(report_data).execute()
-        print(f"Supabase insert result: {result}")
+        # Fetch the latest report for this user (should be the one just inserted)
+        fetch_result = supabase.table("reports") \
+            .select("report_id") \
+            .eq("user_id", validated_uuid) \
+            .order("timestamp", desc=True) \
+            .limit(1) \
+            .execute()
+
+        if fetch_result.data:
+            report_id = fetch_result.data[0]["report_id"]
+        else:
+            raise HTTPException(status_code=500, detail="Failed to retrieve report ID after insert")
 
         # Clean up temporary file
         if os.path.exists(temp_path):
@@ -269,20 +230,22 @@ async def analyze_image(
 
         response_data = {
             "report_id": report_id,
-            "image_url": public_url,  # Supabase Storage URL
+            "image_url": public_url,
             "billboard_number": next_billboard_num,
             "gps_latitude": lat,
             "gps_longitude": lng,
             "timestamp": timestamp,
-            "status": status,
+            "status": "under review",
             "issue": violation_reason,
-            "user_id": parsed_user_id,
+            "user_id": validated_uuid,
             "message": "Report submitted successfully"
         }
 
         print(f"Returning response: {response_data}")
         return JSONResponse(content=response_data)
 
+    except HTTPException:
+        raise
     except subprocess.CalledProcessError as e:
         error_msg = f"YOLO processing failed: {str(e)}"
         print(f"Subprocess error: {error_msg}")
@@ -315,14 +278,126 @@ async def create_test_user():
     except Exception as e:
         return JSONResponse(content={"error": f"Failed to create test user: {str(e)}"}, status_code=500)
 
-# Get reports by user ID endpoint
+# Verify user endpoint (optional but helpful for debugging)
+@app.get("/users/{user_id}/verify")
+async def verify_user(user_id: str):
+    """Verify that a user exists in the database"""
+    try:
+        print(f"Verifying user: {user_id}")
+        # Validate UUID format
+        try:
+            validated_uuid = str(uuid.UUID(user_id))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid user ID format")
+        # Check if user exists
+        result = supabase.table("users").select("id, username, full_name, email").eq("id", validated_uuid).execute()
+        if result.data:
+            user_data = result.data[0]
+            return JSONResponse(content={
+                "exists": True,
+                "user_data": user_data,
+                "message": f"User {validated_uuid} verified successfully"
+            })
+        else:
+            return JSONResponse(content={
+                "exists": False,
+                "message": f"User {validated_uuid} not found"
+            }, status_code=404)
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error verifying user {user_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to verify user: {str(e)}")
+
+# Get user statistics
+@app.get("/users/{user_id}/stats")
+async def get_user_stats(user_id: str):
+    """Get report statistics for a specific user"""
+    try:
+        print(f"Getting stats for user: {user_id}")
+        # Validate UUID format
+        try:
+            validated_uuid = str(uuid.UUID(user_id))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid user ID format")
+        # Get all reports for the user
+        reports_result = supabase.table("reports").select("status").eq("user_id", validated_uuid).execute()
+        if not reports_result.data:
+            return JSONResponse(content={
+                "user_id": validated_uuid,
+                "total_reports": 0,
+                "stats": {}
+            })
+        # Calculate statistics
+        stats = {
+            "total": len(reports_result.data),
+            "under review": 0,
+            "resolved": 0,
+            "rejected": 0,
+            "in progress": 0
+        }
+        for report in reports_result.data:
+            status = report.get('status', '').lower()
+            if status in stats:
+                stats[status] += 1
+        return JSONResponse(content={
+            "user_id": validated_uuid,
+            "total_reports": stats["total"],
+            "stats": stats
+        })
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error getting user stats for {user_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get user stats: {str(e)}")
+
+# Updated get user reports endpoint with better validation
 @app.get("/reports/user/{user_id}")
 async def get_user_reports(user_id: str):
     try:
-        result = supabase.table("reports").select("*").eq("user_id", user_id).order("timestamp", desc=True).execute()
-        return JSONResponse(content={"reports": result.data})
+        print(f"Fetching reports for user_id: {user_id}")
+        # Validate UUID format
+        try:
+            validated_uuid = str(uuid.UUID(user_id))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid user ID format")
+        # Verify user exists first
+        user_check = supabase.table("users").select("id").eq("id", validated_uuid).execute()
+        if not user_check.data:
+            raise HTTPException(status_code=404, detail="User not found")
+        # Get reports for the user
+        result = supabase.table("reports").select("*").eq("user_id", validated_uuid).order("timestamp", desc=True).execute()
+        print(f"Found {len(result.data)} reports for user {validated_uuid}")
+        return JSONResponse(content={
+            "user_id": validated_uuid,
+            "total_reports": len(result.data),
+            "reports": result.data
+        })
+    except HTTPException:
+        raise
     except Exception as e:
-        return JSONResponse(content={"error": f"Failed to fetch user reports: {str(e)}"}, status_code=500)
+        print(f"Error fetching user reports: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch user reports: {str(e)}")
+
+# Health check endpoint
+@app.get("/health")
+async def health_check():
+    """Health check endpoint"""
+    try:
+        # Test database connection
+        test_result = supabase.table("users").select("count").limit(1).execute()
+        return JSONResponse(content={
+            "status": "healthy",
+            "database": "connected",
+            "timestamp": datetime.utcnow().isoformat()
+        })
+    except Exception as e:
+        return JSONResponse(content={
+            "status": "unhealthy",
+            "database": "disconnected",
+            "error": str(e),
+            "timestamp": datetime.utcnow().isoformat()
+        }, status_code=503)
 
 # Get all reports endpoint
 @app.get("/reports/")
@@ -332,6 +407,97 @@ async def get_reports():
         return JSONResponse(content={"reports": result.data})
     except Exception as e:
         return JSONResponse(content={"error": f"Failed to fetch reports: {str(e)}"}, status_code=500)
+
+# NEW: Delete report endpoint
+@app.delete("/reports/{report_id}")
+async def delete_report(report_id: str):
+    try:
+        print(f"Attempting to delete report: {report_id}")
+        
+        # First, check if the report exists and get its details
+        check_result = supabase.table("reports").select("*").eq("report_id", report_id).execute()
+        
+        if not check_result.data:
+            raise HTTPException(status_code=404, detail="Report not found")
+        
+        report = check_result.data[0]
+        
+        # Optional: Delete the image from Supabase Storage if needed
+        # You might want to add user authorization here to ensure users can only delete their own reports
+        image_url = report.get('image_url', '')
+        if 'supabase' in image_url:
+            try:
+                # Extract filename from URL to delete from storage
+                filename = image_url.split('/')[-1]
+                supabase.storage.from_('images').remove([filename])
+                print(f"Deleted image from storage: {filename}")
+            except Exception as img_del_error:
+                print(f"Could not delete image from storage: {img_del_error}")
+                # Continue with report deletion even if image deletion fails
+        
+        # Delete the report from the database
+        delete_result = supabase.table("reports").delete().eq("report_id", report_id).execute()
+        
+        if delete_result.data:
+            print(f"Successfully deleted report: {report_id}")
+            return JSONResponse(content={
+                "message": "Report deleted successfully",
+                "deleted_report_id": report_id
+            })
+        else:
+            raise HTTPException(status_code=500, detail="Failed to delete report from database")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error deleting report {report_id}: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to delete report: {str(e)}")
+
+# NEW: Delete report with user authorization
+@app.delete("/reports/{report_id}/user/{user_id}")
+async def delete_user_report(report_id: str, user_id: str):
+    try:
+        print(f"Attempting to delete report {report_id} for user {user_id}")
+        
+        # Check if the report exists and belongs to the user
+        check_result = supabase.table("reports").select("*").eq("report_id", report_id).eq("user_id", user_id).execute()
+        
+        if not check_result.data:
+            raise HTTPException(status_code=404, detail="Report not found or you don't have permission to delete it")
+        
+        report = check_result.data[0]
+        
+        # Delete the image from Supabase Storage if needed
+        image_url = report.get('image_url', '')
+        if 'supabase' in image_url:
+            try:
+                filename = image_url.split('/')[-1]
+                supabase.storage.from_('images').remove([filename])
+                print(f"Deleted image from storage: {filename}")
+            except Exception as img_del_error:
+                print(f"Could not delete image from storage: {img_del_error}")
+        
+        # Delete the report from the database
+        delete_result = supabase.table("reports").delete().eq("report_id", report_id).eq("user_id", user_id).execute()
+        
+        if delete_result.data:
+            print(f"Successfully deleted report: {report_id}")
+            return JSONResponse(content={
+                "message": "Report deleted successfully",
+                "deleted_report_id": report_id
+            })
+        else:
+            raise HTTPException(status_code=500, detail="Failed to delete report from database")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error deleting report {report_id} for user {user_id}: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to delete report: {str(e)}")
 
 # Test endpoint to upload image directly to Supabase Storage
 @app.post("/test-upload/")

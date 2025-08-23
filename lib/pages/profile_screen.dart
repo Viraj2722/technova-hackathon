@@ -1,7 +1,7 @@
-
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../widgets/app_header.dart';
+import '../services/user_service.dart'; // <-- Import UserService
 
 
 class ProfileScreen extends StatelessWidget {
@@ -83,6 +83,7 @@ class ProfileScreen extends StatelessWidget {
           const SizedBox(height: 8),
           _buildMenuItem(Icons.logout, 'Log Out', Colors.red[600]!, onTap: () async {
             await FirebaseAuth.instance.signOut();
+            await UserService.clearUserData(); // <-- Add this line!
             if (context.mounted) {
               Navigator.of(context).pushReplacementNamed('/login');
               ScaffoldMessenger.of(context).showSnackBar(

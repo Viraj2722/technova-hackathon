@@ -4,6 +4,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'dart:io';
 import 'package:http/http.dart' as http;
+import 'package:my_app/services/user_service.dart'; // Add this import
 
 // Camera Screen Widget
 class CameraScreen extends StatefulWidget {
@@ -64,13 +65,17 @@ class _CameraScreenState extends State<CameraScreen> {
           print('Location error: $e');
         }
 
+        // Get Supabase UUID
+        String userId = widget.userId ??
+            (await UserService.getCurrentSupabaseUserId()) ?? 'anonymous';
+
         if (mounted) {
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(
               builder: (context) => ReportConfirmationScreen(
                 imageFile: File(image.path),
                 position: position,
-                userId: widget.userId ?? 'anonymous',
+                userId: userId, // Now always Supabase UUID if available
                 timestamp: DateTime.now(),
               ),
             ),
@@ -288,12 +293,21 @@ class _ReportConfirmationScreenState extends State<ReportConfirmationScreen> {
             DropdownButtonFormField<String>(
               value: selectedReason,
               hint: const Text('Select a violation reason'),
+              isExpanded: true, // <-- Add this line
               items: reasons.map((reason) {
                 return DropdownMenuItem<String>(
                   value: reason,
-                  child: Text(
-                    reason,
-                    style: const TextStyle(fontSize: 14),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          reason,
+                          style: const TextStyle(fontSize: 14),
+                          overflow: TextOverflow.ellipsis, // <-- Add this line
+                          maxLines: 1, // <-- Add this line
+                        ),
+                      ),
+                    ],
                   ),
                 );
               }).toList(),
@@ -363,6 +377,22 @@ class _ReportConfirmationScreenState extends State<ReportConfirmationScreen> {
 
   void _submitReport() async {
     if (!mounted) return;
+
+    // Validate user ID before submission
+    String? validUserId = widget.userId;
+    if (validUserId == 'anonymous' || validUserId == null) {
+      validUserId = await UserService.getCurrentSupabaseUserId();
+      if (validUserId == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please log in to submit a report'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+    }
+
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -380,7 +410,7 @@ class _ReportConfirmationScreenState extends State<ReportConfirmationScreen> {
     );
 
     try {
-      final uri = Uri.parse('http://192.168.6.99:8000/analyze-image/');
+      final uri = Uri.parse('http://192.168.0.103:8000/analyze-image/');
       final request = http.MultipartRequest('POST', uri);
 
       // Attach image file
@@ -400,8 +430,8 @@ class _ReportConfirmationScreenState extends State<ReportConfirmationScreen> {
       // Attach violation reason
       request.fields['violation_reason'] = selectedReason ?? '';
 
-      // Attach user_id
-      request.fields['user_id'] = widget.userId;
+      // Attach user_id (use validated user ID)
+      request.fields['user_id'] = validUserId;
 
       // Send request
       final response = await request.send();

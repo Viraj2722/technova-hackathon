@@ -1,16 +1,17 @@
-import sys
 import os
 from ultralytics import YOLO
 
 MODEL_PATH = os.path.join(os.path.dirname(__file__), '..', 'best.pt')
-TEST_IMAGE_PATH = 'C:/Users/hp1/OneDrive/Desktop/technova-hackathon/image.png'  # Change this to your test image file
+TEST_IMAGE_PATH = r'C:\Users\Viraj Walavalkar\Desktop\technova-hackathon\my_app\backend\static\croppedresult\billboard5.png'
 
-def run_model(image_path, output_dir=None):
-    # Load Ultralytics YOLO model
+def run_model(image_path):
     model = YOLO(MODEL_PATH)
-        # Run inference
     results = model(image_path)
+    results[0].show()
     print(results)
+
+if __name__ == '__main__':
+    run_model(TEST_IMAGE_PATH)
     # Load original image
     from PIL import Image
     import numpy as np

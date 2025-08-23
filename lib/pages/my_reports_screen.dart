@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../widgets/app_header.dart';
+import '../services/user_service.dart';
 
 class Report {
-  final String reportId;
+  final int reportId; // <-- Change from String to int
   final String imageUrl;
   final double? gpsLatitude;
   final double? gpsLongitude;
   final DateTime timestamp;
   final String status;
   final String issue;
-  final String? userId;
+  final String userId;
 
   Report({
     required this.reportId,
@@ -21,7 +21,7 @@ class Report {
     required this.timestamp,
     required this.status,
     required this.issue,
-    this.userId,
+    required this.userId,
   });
 
   factory Report.fromJson(Map<String, dynamic> json) {
@@ -30,7 +30,7 @@ class Report {
       imageUrl: json['image_url'] ?? '',
       gpsLatitude: json['gps_latitude']?.toDouble(),
       gpsLongitude: json['gps_longitude']?.toDouble(),
-      timestamp: DateTime.parse(json['timestamp']),
+      timestamp: DateTime.parse(json['timestamp']), // Remove the fallback to 'created_at'
       status: json['status'] ?? 'unknown',
       issue: json['issue'] ?? 'No description',
       userId: json['user_id'],
@@ -39,66 +39,163 @@ class Report {
 }
 
 class MyReportsScreen extends StatefulWidget {
-  final String? userId; // Pass the current user's ID
-
-  const MyReportsScreen({super.key, this.userId});
+  const MyReportsScreen({super.key});
 
   @override
   State<MyReportsScreen> createState() => _MyReportsScreenState();
 }
 
 class _MyReportsScreenState extends State<MyReportsScreen> {
+  final SupabaseClient _supabase = Supabase.instance.client;
   List<Report> _reports = [];
   bool _isLoading = true;
   String? _error;
+  String? _currentUserId;
 
   @override
   void initState() {
     super.initState();
-    _fetchReports();
+    _initializeAndFetchReports();
+  }
+
+  Future<void> _initializeAndFetchReports() async {
+    await _getCurrentUserId();
+    await _fetchReports();
+  }
+
+  Future<void> _getCurrentUserId() async {
+    try {
+      final userId = await UserService.getCurrentSupabaseUserId();
+
+      if (userId == null) {
+        setState(() {
+          _error = 'User not authenticated. Please log in again.';
+          _isLoading = false;
+        });
+        return;
+      }
+
+      _currentUserId = userId;
+      print('DEBUG: Current user ID: $_currentUserId');
+    } catch (e) {
+      setState(() {
+        _error = 'Failed to get user information: $e';
+        _isLoading = false;
+      });
+      print('Error getting current user ID: $e');
+    }
   }
 
   Future<void> _fetchReports() async {
+    if (_currentUserId == null) {
+      setState(() {
+        _error = 'User ID not available';
+        _isLoading = false;
+      });
+      return;
+    }
+
     try {
       setState(() {
         _isLoading = true;
         _error = null;
       });
 
-      final response = await http.get(
-        Uri.parse('http://192.168.6.99:8000/reports/'),
-      );
+      print('DEBUG: Fetching reports for user: $_currentUserId');
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final List<dynamic> reportsJson = data['reports'] ?? [];
+      // Fetch reports directly from Supabase
+      final response = await _supabase
+          .from('reports')
+          .select('*')
+          .eq('user_id', _currentUserId!)
+          .order('timestamp', ascending: false); // Changed from 'created_at' to 'timestamp'
 
-        // Filter reports for current user (if userId is provided)
-        List<Report> allReports =
-            reportsJson.map((json) => Report.fromJson(json)).toList();
+      print('DEBUG: Supabase response: $response');
 
-        if (widget.userId != null && widget.userId != 'anonymous') {
-          _reports = allReports
-              .where((report) => report.userId == widget.userId)
-              .toList();
-        } else {
-          // If no specific user, show all reports for demo purposes
-          _reports = allReports;
-        }
+      final List<Report> reports =
+          (response as List).map((json) => Report.fromJson(json)).toList();
 
-        // Sort by timestamp (newest first)
-        _reports.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-      } else {
-        throw Exception('Failed to load reports: ${response.statusCode}');
-      }
+      setState(() {
+        _reports = reports;
+      });
+
+      print('DEBUG: Loaded ${_reports.length} reports');
     } catch (e) {
       setState(() {
         _error = 'Failed to load reports: $e';
       });
+      print('Error fetching reports: $e');
     } finally {
       setState(() {
         _isLoading = false;
       });
+    }
+  }
+
+  void _showDeleteConfirmation(Report report) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Delete Report'),
+          content: const Text(
+            'Are you sure you want to delete this report? This action cannot be undone.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _deleteReport(report.reportId); // <-- Use int directly
+              },
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.red,
+              ),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _deleteReport(int reportId) async { // <-- Accept int
+    if (_currentUserId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('User not authenticated'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    try {
+      // Delete from Supabase with user verification
+      await _supabase.from('reports').delete().eq('report_id', reportId).eq(
+          'user_id',
+          _currentUserId!); // Ensure user can only delete their own reports
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Report deleted successfully'),
+          backgroundColor: Colors.green,
+        ),
+      );
+
+      // Refresh the list
+      await _fetchReports();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to delete report: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      print('Error deleting report: $e');
     }
   }
 
@@ -163,14 +260,38 @@ class _MyReportsScreenState extends State<MyReportsScreen> {
           children: [
             const AppHeader(),
             const SizedBox(height: 24),
-            const Text(
-              'My Reports',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Colors.black87,
-              ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'My Reports',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
+                ),
+                if (!_isLoading && _reports.isNotEmpty)
+                  Text(
+                    '${_reports.length} report${_reports.length == 1 ? '' : 's'}',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+              ],
             ),
+            if (_currentUserId != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  'User ID: ${_currentUserId!.substring(0, 8)}...',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[500],
+                  ),
+                ),
+              ),
             const SizedBox(height: 24),
             if (_isLoading) ...[
               const Center(
@@ -199,7 +320,7 @@ class _MyReportsScreenState extends State<MyReportsScreen> {
                     ),
                     const SizedBox(height: 8),
                     ElevatedButton(
-                      onPressed: _fetchReports,
+                      onPressed: _initializeAndFetchReports,
                       child: const Text('Retry'),
                     ),
                   ],
@@ -239,7 +360,6 @@ class _MyReportsScreenState extends State<MyReportsScreen> {
                 ),
               ),
             ] else ...[
-              // Display reports
               ListView.separated(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
@@ -276,6 +396,56 @@ class _MyReportsScreenState extends State<MyReportsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Header with delete button
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Report ${report.reportId}',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.grey,
+                ),
+              ),
+              PopupMenuButton<String>(
+                onSelected: (value) {
+                  if (value == 'delete') {
+                    _showDeleteConfirmation(report);
+                  }
+                },
+                itemBuilder: (BuildContext context) => [
+                  const PopupMenuItem<String>(
+                    value: 'delete',
+                    child: Row(
+                      children: [
+                        Icon(Icons.delete, size: 18, color: Colors.red),
+                        SizedBox(width: 8),
+                        Text(
+                          'Delete',
+                          style: TextStyle(color: Colors.red),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[100],
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Icon(
+                    Icons.more_vert,
+                    size: 16,
+                    color: Colors.grey[600],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
           // Image section
           Container(
             width: double.infinity,

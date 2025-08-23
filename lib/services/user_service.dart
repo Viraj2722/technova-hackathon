@@ -90,4 +90,37 @@ class UserService {
 
     return firebaseUser != null && supabaseUserId != null;
   }
+
+  // Sync user IDs between Firebase and Supabase, and save locally
+  static Future<void> syncUserIds() async {
+    try {
+      final firebaseUser = firebase_auth.FirebaseAuth.instance.currentUser;
+      if (firebaseUser == null) return;
+
+      String? supabaseId = await getSupabaseUserIdFromFirebase(firebaseUser.uid);
+      if (supabaseId != null) {
+        await saveUserIds(
+          supabaseUserId: supabaseId,
+          firebaseUid: firebaseUser.uid,
+        );
+      }
+    } catch (e) {
+      print('Error syncing user IDs: $e');
+    }
+  }
+
+  // Validate if a user exists in Supabase by user ID
+  static Future<bool> validateUserExists(String supabaseUserId) async {
+    try {
+      final response = await _supabaseClient
+          .from('users')
+          .select('id')
+          .eq('id', supabaseUserId)
+          .maybeSingle();
+      return response != null;
+    } catch (e) {
+      print('Error validating user: $e');
+      return false;
+    }
+  }
 }
