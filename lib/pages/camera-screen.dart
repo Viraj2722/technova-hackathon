@@ -67,7 +67,8 @@ class _CameraScreenState extends State<CameraScreen> {
 
         // Get Supabase UUID
         String userId = widget.userId ??
-            (await UserService.getCurrentSupabaseUserId()) ?? 'anonymous';
+            (await UserService.getCurrentSupabaseUserId()) ??
+            'anonymous';
 
         if (mounted) {
           Navigator.of(context).pushReplacement(
@@ -125,22 +126,105 @@ class ReportConfirmationScreen extends StatefulWidget {
 
 class _ReportConfirmationScreenState extends State<ReportConfirmationScreen> {
   String? selectedReason;
-  final List<String> reasons = [
-    'No Permit / Unauthorized Billboard',
-    'Expired License / Permit',
-    'Wrong Location (Non-designated Area)',
-    'Oversized Billboard (Exceeds Allowed Dimensions)',
-    'Obstructing Traffic Signs / View',
-    'Obstructing Pedestrian Path / Public Property',
-    'Dangerous Placement (Weak Structure / Risk of Falling)',
-    'Lighting Violation (Too Bright / Flashing / Hazardous at Night)',
-    'Illegal Content (Offensive / Adult / Prohibited Ads)',
-    'Too Close to Residential Area / School / Religious Place',
-    'Environmental Violation (On Trees / Natural Reserve / Green Zone)',
-    'Multiple Boards in Same Spot (Overcrowding)',
-    'Damaged / Broken Billboard (Safety Hazard)',
-    'Violation of City Zoning Rules',
-  ];
+
+  // Categorized violation reasons with their types
+  final Map<String, List<ViolationReason>> categorizedReasons = {
+    'Hazardous': [
+      ViolationReason(
+        'Dangerous Placement (Weak Structure / Risk of Falling)',
+        'Structure poses physical danger to public safety',
+      ),
+      ViolationReason(
+        'Lighting Violation (Too Bright / Flashing / Hazardous at Night)',
+        'Lighting creates safety hazards for drivers and pedestrians',
+      ),
+      ViolationReason(
+        'Obstructing Traffic Signs / View',
+        'Billboard blocks critical traffic signage or driver visibility',
+      ),
+      ViolationReason(
+        'Obstructing Pedestrian Path / Public Property',
+        'Billboard blocks walkways or access to public facilities',
+      ),
+      ViolationReason(
+        'Damaged / Broken Billboard (Safety Hazard)',
+        'Damaged structure creates immediate safety risk',
+      ),
+    ],
+    'Illegal': [
+      ViolationReason(
+        'No Permit / Unauthorized Billboard',
+        'Billboard erected without proper municipal authorization',
+      ),
+      ViolationReason(
+        'Expired License / Permit',
+        'Billboard operating with expired or invalid permits',
+      ),
+      ViolationReason(
+        'Wrong Location (Non-designated Area)',
+        'Billboard placed in area not zoned for advertising',
+      ),
+      ViolationReason(
+        'Oversized Billboard (Exceeds Allowed Dimensions)',
+        'Billboard dimensions exceed municipal regulations',
+      ),
+      ViolationReason(
+        'Environmental Violation (On Trees / Natural Reserve / Green Zone)',
+        'Billboard placed in environmentally protected area',
+      ),
+      ViolationReason(
+        'Multiple Boards in Same Spot (Overcrowding)',
+        'Exceeds permitted number of billboards per location',
+      ),
+      ViolationReason(
+        'Violation of City Zoning Rules',
+        'Billboard violates specific municipal zoning ordinances',
+      ),
+    ],
+    'Inappropriate': [
+      ViolationReason(
+        'Illegal Content (Offensive / Adult / Prohibited Ads)',
+        'Billboard displays content violating advertising standards',
+      ),
+      ViolationReason(
+        'Too Close to Residential Area / School / Religious Place',
+        'Billboard placement violates proximity restrictions to sensitive areas',
+      ),
+    ],
+  };
+
+  // Get flat list of all reasons for dropdown
+  List<ViolationReason> get allReasons {
+    List<ViolationReason> reasons = [];
+    categorizedReasons.forEach((category, reasonList) {
+      reasons.addAll(reasonList);
+    });
+    return reasons;
+  }
+
+  // Get category for a specific reason
+  String getCategoryForReason(String reason) {
+    for (String category in categorizedReasons.keys) {
+      for (ViolationReason violationReason in categorizedReasons[category]!) {
+        if (violationReason.reason == reason) {
+          return category;
+        }
+      }
+    }
+    return 'Illegal'; // Default category
+  }
+
+  // Get action description for a specific reason
+  String getActionForReason(String reason) {
+    for (String category in categorizedReasons.keys) {
+      for (ViolationReason violationReason in categorizedReasons[category]!) {
+        if (violationReason.reason == reason) {
+          return violationReason.actionDescription;
+        }
+      }
+    }
+    return 'Violation requires municipal review and enforcement action';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -280,7 +364,7 @@ class _ReportConfirmationScreenState extends State<ReportConfirmationScreen> {
             ),
             const SizedBox(height: 24),
 
-            // Violation reason dropdown
+            // Violation reason dropdown with categories
             const Text(
               'Violation Reason',
               style: TextStyle(
@@ -290,53 +374,165 @@ class _ReportConfirmationScreenState extends State<ReportConfirmationScreen> {
               ),
             ),
             const SizedBox(height: 8),
-            DropdownButtonFormField<String>(
-              value: selectedReason,
-              hint: const Text('Select a violation reason'),
-              isExpanded: true, // <-- Add this line
-              items: reasons.map((reason) {
-                return DropdownMenuItem<String>(
-                  value: reason,
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          reason,
-                          style: const TextStyle(fontSize: 14),
-                          overflow: TextOverflow.ellipsis, // <-- Add this line
-                          maxLines: 1, // <-- Add this line
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey[300]!),
+              ),
+              child: Column(
+                children: [
+                  // Category tabs
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.grey[100],
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(12),
+                        topRight: Radius.circular(12),
+                      ),
+                    ),
+                    child: Row(
+                      children: categorizedReasons.keys.map((category) {
+                        Color categoryColor = _getCategoryColor(category);
+                        return Expanded(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            decoration: BoxDecoration(
+                              color: categoryColor.withOpacity(0.1),
+                              border: Border(
+                                right: BorderSide(
+                                  color: Colors.grey[300]!,
+                                  width:
+                                      category != categorizedReasons.keys.last
+                                          ? 1
+                                          : 0,
+                                ),
+                              ),
+                            ),
+                            child: Text(
+                              category,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: categoryColor,
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+
+                  // Dropdown
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: DropdownButtonFormField<String>(
+                      value: selectedReason,
+                      hint: const Text('Select a violation reason'),
+                      isExpanded: true,
+                      items: allReasons.map((violationReason) {
+                        String category =
+                            getCategoryForReason(violationReason.reason);
+                        Color categoryColor = _getCategoryColor(category);
+
+                        return DropdownMenuItem<String>(
+                          value: violationReason.reason,
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 4,
+                                height: 20,
+                                decoration: BoxDecoration(
+                                  color: categoryColor,
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  violationReason.reason,
+                                  style: const TextStyle(fontSize: 14),
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        setState(() {
+                          selectedReason = value;
+                        });
+                      },
+                      decoration: const InputDecoration(
+                        border: InputBorder.none,
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 0,
+                          vertical: 8,
                         ),
                       ),
-                    ],
+                    ),
                   ),
-                );
-              }).toList(),
-              onChanged: (value) {
-                setState(() {
-                  selectedReason = value;
-                });
-              },
-              decoration: InputDecoration(
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey[300]!),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey[300]!),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: Colors.blue, width: 2),
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 16,
-                ),
-                filled: true,
-                fillColor: Colors.white,
+                ],
               ),
             ),
+
+            // Show selected category and action description
+            if (selectedReason != null) ...[
+              const SizedBox(height: 16),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color:
+                      _getCategoryColor(getCategoryForReason(selectedReason!))
+                          .withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color:
+                        _getCategoryColor(getCategoryForReason(selectedReason!))
+                            .withOpacity(0.3),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: _getCategoryColor(
+                                getCategoryForReason(selectedReason!)),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            getCategoryForReason(selectedReason!),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      getActionForReason(selectedReason!),
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey[700],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
             const SizedBox(height: 32),
 
             // Submit button
@@ -373,6 +569,19 @@ class _ReportConfirmationScreenState extends State<ReportConfirmationScreen> {
         ),
       ),
     );
+  }
+
+  Color _getCategoryColor(String category) {
+    switch (category) {
+      case 'Hazardous':
+        return Colors.red;
+      case 'Illegal':
+        return Colors.orange;
+      case 'Inappropriate':
+        return Colors.purple;
+      default:
+        return Colors.grey;
+    }
   }
 
   void _submitReport() async {
@@ -430,6 +639,12 @@ class _ReportConfirmationScreenState extends State<ReportConfirmationScreen> {
       // Attach violation reason
       request.fields['violation_reason'] = selectedReason ?? '';
 
+      // Attach report type (category)
+      request.fields['report_type'] = getCategoryForReason(selectedReason!);
+
+      // Attach action taken (description)
+      request.fields['action_taken'] = getActionForReason(selectedReason!);
+
       // Attach user_id (use validated user ID)
       request.fields['user_id'] = validUserId;
 
@@ -471,4 +686,12 @@ class _ReportConfirmationScreenState extends State<ReportConfirmationScreen> {
       }
     }
   }
+}
+
+// Helper class for violation reasons
+class ViolationReason {
+  final String reason;
+  final String actionDescription;
+
+  ViolationReason(this.reason, this.actionDescription);
 }

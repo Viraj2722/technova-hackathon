@@ -13,6 +13,7 @@ import glob
 import shutil
 import re
 import tempfile
+import json
 
 # Load environment
 load_dotenv(os.path.join(os.path.dirname(__file__), '.env'))
@@ -134,10 +135,13 @@ async def analyze_image(
     gps_latitude: str = Form(""),
     gps_longitude: str = Form(""),
     violation_reason: str = Form(...),
+    report_type: str = Form(...),  # New field for category (Hazardous/Illegal/Inappropriate)
+    action_taken: str = Form(...),  # New field for action description
     user_id: str = Form(...)  # This should be Supabase UUID
 ):
     try:
         print(f"Received request for user: {user_id}")
+        print(f"Report type: {report_type}, Action: {action_taken}")
 
         # Validate user_id format and existence
         try:
@@ -149,6 +153,11 @@ async def analyze_image(
             print(f"Valid user confirmed: {validated_uuid}")
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid user ID format")
+
+        # Validate report_type
+        valid_report_types = ['Hazardous', 'Illegal', 'Inappropriate']
+        if report_type not in valid_report_types:
+            raise HTTPException(status_code=400, detail=f"Invalid report type. Must be one of: {valid_report_types}")
 
         # Save uploaded image temporarily
         temp_path = os.path.join(temp_uploads_dir, f"temp_{uuid.uuid4()}{os.path.splitext(image.filename)[1]}")
@@ -198,6 +207,8 @@ async def analyze_image(
             "timestamp": timestamp,
             "status": "under review",
             "issue": violation_reason,
+            "report_type": report_type,  # New field for category
+            "action_taken": action_taken,  # New field for action description
             "user_id": validated_uuid
             # Don't include report_id - let it auto-increment
         }
@@ -237,6 +248,8 @@ async def analyze_image(
             "timestamp": timestamp,
             "status": "under review",
             "issue": violation_reason,
+            "report_type": report_type,  # Include in response
+            "action_taken": action_taken,  # Include in response
             "user_id": validated_uuid,
             "message": "Report submitted successfully"
         }
@@ -309,10 +322,10 @@ async def verify_user(user_id: str):
         print(f"Error verifying user {user_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to verify user: {str(e)}")
 
-# Get user statistics
+# Get user statistics with report type breakdown
 @app.get("/users/{user_id}/stats")
 async def get_user_stats(user_id: str):
-    """Get report statistics for a specific user"""
+    """Get report statistics for a specific user including report type breakdown"""
     try:
         print(f"Getting stats for user: {user_id}")
         # Validate UUID format
@@ -321,29 +334,46 @@ async def get_user_stats(user_id: str):
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid user ID format")
         # Get all reports for the user
-        reports_result = supabase.table("reports").select("status").eq("user_id", validated_uuid).execute()
+        reports_result = supabase.table("reports").select("status, report_type").eq("user_id", validated_uuid).execute()
         if not reports_result.data:
             return JSONResponse(content={
                 "user_id": validated_uuid,
                 "total_reports": 0,
-                "stats": {}
+                "status_stats": {},
+                "type_stats": {}
             })
-        # Calculate statistics
-        stats = {
+        # Calculate status statistics
+        status_stats = {
             "total": len(reports_result.data),
             "under review": 0,
             "resolved": 0,
             "rejected": 0,
             "in progress": 0
         }
+        
+        # Calculate report type statistics
+        type_stats = {
+            "Hazardous": 0,
+            "Illegal": 0,
+            "Inappropriate": 0
+        }
+        
         for report in reports_result.data:
+            # Count by status
             status = report.get('status', '').lower()
-            if status in stats:
-                stats[status] += 1
+            if status in status_stats:
+                status_stats[status] += 1
+            
+            # Count by report type
+            report_type = report.get('report_type', '')
+            if report_type in type_stats:
+                type_stats[report_type] += 1
+        
         return JSONResponse(content={
             "user_id": validated_uuid,
-            "total_reports": stats["total"],
-            "stats": stats
+            "total_reports": status_stats["total"],
+            "status_stats": status_stats,
+            "type_stats": type_stats
         })
     except HTTPException:
         raise
@@ -351,7 +381,7 @@ async def get_user_stats(user_id: str):
         print(f"Error getting user stats for {user_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to get user stats: {str(e)}")
 
-# Updated get user reports endpoint with better validation
+# Updated get user reports endpoint with report type and action taken
 @app.get("/reports/user/{user_id}")
 async def get_user_reports(user_id: str):
     try:
@@ -399,14 +429,43 @@ async def health_check():
             "timestamp": datetime.utcnow().isoformat()
         }, status_code=503)
 
-# Get all reports endpoint
+# Get all reports endpoint with report type filtering
 @app.get("/reports/")
-async def get_reports():
+async def get_reports(report_type: str = None):
     try:
-        result = supabase.table("reports").select("*").order("timestamp", desc=True).execute()
+        query = supabase.table("reports").select("*")
+        if report_type and report_type in ['Hazardous', 'Illegal', 'Inappropriate']:
+            query = query.eq("report_type", report_type)
+        result = query.order("timestamp", desc=True).execute()
         return JSONResponse(content={"reports": result.data})
     except Exception as e:
         return JSONResponse(content={"error": f"Failed to fetch reports: {str(e)}"}, status_code=500)
+
+# Get report statistics by type
+@app.get("/reports/stats/by-type")
+async def get_report_stats_by_type():
+    """Get report statistics broken down by report type"""
+    try:
+        result = supabase.table("reports").select("report_type, status").execute()
+        
+        stats = {
+            "Hazardous": {"total": 0, "under review": 0, "resolved": 0, "rejected": 0, "in progress": 0},
+            "Illegal": {"total": 0, "under review": 0, "resolved": 0, "rejected": 0, "in progress": 0},
+            "Inappropriate": {"total": 0, "under review": 0, "resolved": 0, "rejected": 0, "in progress": 0}
+        }
+        
+        for report in result.data:
+            report_type = report.get('report_type', '')
+            status = report.get('status', '').lower()
+            
+            if report_type in stats:
+                stats[report_type]["total"] += 1
+                if status in stats[report_type]:
+                    stats[report_type][status] += 1
+        
+        return JSONResponse(content={"type_stats": stats})
+    except Exception as e:
+        return JSONResponse(content={"error": f"Failed to fetch report stats: {str(e)}"}, status_code=500)
 
 # NEW: Delete report endpoint
 @app.delete("/reports/{report_id}")
@@ -542,19 +601,164 @@ async def get_monthly_report_count():
     except Exception as e:
         return {"count": 0, "error": str(e)}
 
-# NEW: Get count of reports with status 'approved'
+# NEW: Get count of reports with status 'resolved'
 @app.get("/reports/count/resolved")
 async def get_resolved_report_count():
     """Get count of reports with status 'resolved'"""
     try:
         result = supabase.table("reports") \
             .select("report_id", count="exact") \
-            .eq("status", "Resolved") \
+            .eq("status", "resolved") \
             .execute()
         return {"count": result.count or 0}
     except Exception as e:
         return {"count": 0, "error": str(e)}
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+# NEW: Calculate user points based on report status
+def calculate_user_points(user_reports):
+    """Calculate points for a user based on their report statuses"""
+    points = 0
+    for report in user_reports:
+        status = report.get('status', '').lower()
+        if status == 'resolved':
+            points += 10
+        elif status == 'rejected':
+            points = max(0, points - 5)  # Don't go below 0
+    return points
+
+# NEW: Get leaderboard data
+@app.get("/leaderboard/")
+async def get_leaderboard():
+    """Get leaderboard with user rankings based on points from resolved/rejected reports"""
+    try:
+        # Get all users
+        users_result = supabase.table("users").select("id, username, full_name").execute()
+        if not users_result.data:
+            return JSONResponse(content={"leaderboard": []})
+        
+        leaderboard_data = []
+        
+        for user in users_result.data:
+            user_id = user['id']
+            username = user.get('username', user.get('full_name', 'Unknown User'))
+            
+            # Get all reports for this user
+            reports_result = supabase.table("reports").select("status").eq("user_id", user_id).execute()
+            
+            # Calculate points
+            points = calculate_user_points(reports_result.data)
+            
+            # Count total reports
+            total_reports = len(reports_result.data)
+            resolved_reports = len([r for r in reports_result.data if r.get('status', '').lower() == 'resolved'])
+            rejected_reports = len([r for r in reports_result.data if r.get('status', '').lower() == 'rejected'])
+            
+            # Only include users with at least some activity
+            if total_reports > 0:
+                leaderboard_data.append({
+                    "user_id": user_id,
+                    "username": username,
+                    "points": points,
+                    "total_reports": total_reports,
+                    "resolved_reports": resolved_reports,
+                    "rejected_reports": rejected_reports
+                })
+        
+        # Sort by points (descending) and then by total reports (descending)
+        leaderboard_data.sort(key=lambda x: (x['points'], x['total_reports']), reverse=True)
+        
+        # Add rank to each user
+        for i, user_data in enumerate(leaderboard_data):
+            user_data['rank'] = i + 1
+        
+        return JSONResponse(content={"leaderboard": leaderboard_data})
+        
+    except Exception as e:
+        print(f"Error getting leaderboard: {e}")
+        return JSONResponse(content={"error": f"Failed to get leaderboard: {str(e)}"}, status_code=500)
+
+# NEW: Get specific user's rank and points
+@app.get("/users/{user_id}/rank")
+async def get_user_rank(user_id: str):
+    """Get a specific user's rank and points"""
+    try:
+        # Validate UUID format
+        try:
+            validated_uuid = str(uuid.UUID(user_id))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid user ID format")
+        
+        # Get leaderboard to find user's rank
+        leaderboard_response = await get_leaderboard()
+        leaderboard_content = leaderboard_response.body.decode('utf-8')
+        leaderboard_data = json.loads(leaderboard_content)
+        
+        if 'error' in leaderboard_data:
+            raise HTTPException(status_code=500, detail="Failed to get leaderboard data")
+        
+        # Find user in leaderboard
+        user_data = None
+        for user in leaderboard_data['leaderboard']:
+            if user['user_id'] == validated_uuid:
+                user_data = user
+                break
+        
+        if user_data:
+            return JSONResponse(content={
+                "user_id": validated_uuid,
+                "rank": user_data['rank'],
+                "points": user_data['points'],
+                "total_reports": user_data['total_reports'],
+                "resolved_reports": user_data['resolved_reports'],
+                "rejected_reports": user_data['rejected_reports'],
+                "username": user_data['username']
+            })
+        else:
+            # User not in leaderboard (no reports), return default values
+            user_result = supabase.table("users").select("username, full_name").eq("id", validated_uuid).execute()
+            username = "Unknown User"
+            if user_result.data:
+                username = user_result.data[0].get('username', user_result.data[0].get('full_name', 'Unknown User'))
+            
+            return JSONResponse(content={
+                "user_id": validated_uuid,
+                "rank": None,
+                "points": 0,
+                "total_reports": 0,
+                "resolved_reports": 0,
+                "rejected_reports": 0,
+                "username": username
+            })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error getting user rank for {user_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get user rank: {str(e)}")
+
+# NEW: Update report status (for admin/testing)
+@app.put("/reports/{report_id}/status")
+async def update_report_status(report_id: str, status: str = Form(...)):
+    """Update report status - useful for testing the points system"""
+    try:
+        valid_statuses = ['under review', 'resolved', 'rejected', 'in progress']
+        if status.lower() not in valid_statuses:
+            raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of: {valid_statuses}")
+        
+        # Update the report status
+        result = supabase.table("reports").update({"status": status.lower()}).eq("report_id", report_id).execute()
+        
+        if result.data:
+            return JSONResponse(content={
+                "message": "Report status updated successfully",
+                "report_id": report_id,
+                "new_status": status.lower()
+            })
+        else:
+            raise HTTPException(status_code=404, detail="Report not found")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error updating report status: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to update report status: {str(e)}")

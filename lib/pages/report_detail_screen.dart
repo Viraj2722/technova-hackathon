@@ -17,54 +17,67 @@ class ReportDetailScreen extends StatefulWidget {
 
 class _ReportDetailScreenState extends State<ReportDetailScreen> {
   final SupabaseClient _supabase = Supabase.instance.client;
+  String? _actionTaken;
+  String? _reportType;
   String? _rejectReason;
-  bool _isLoadingRejectReason = false;
+  bool _isLoadingDetails = false;
 
   @override
   void initState() {
     super.initState();
-    if (widget.report.status.toLowerCase() == 'rejected') {
-      _fetchRejectReason();
-    }
+    _fetchReportDetails();
   }
 
-  Future<void> _fetchRejectReason() async {
+  Future<void> _fetchReportDetails() async {
     setState(() {
-      _isLoadingRejectReason = true;
+      _isLoadingDetails = true;
     });
 
     try {
       final response = await _supabase
           .from('reports')
-          .select('reject_reason')
+          .select('action_taken, report_type')
           .eq('report_id', widget.report.reportId)
           .single();
 
       setState(() {
-        _rejectReason = response['reject_reason'];
+        _actionTaken = response['action_taken'];
+        _reportType = response['report_type'];
       });
     } catch (e) {
-      print('Error fetching reject reason: $e');
+      print('Error fetching report details: $e');
       setState(() {
-        _rejectReason = 'Unable to load reject reason';
+        _actionTaken = 'Unable to load action details';
+        _reportType = 'Unknown';
+        _rejectReason = null;
       });
     } finally {
       setState(() {
-        _isLoadingRejectReason = false;
+        _isLoadingDetails = false;
       });
     }
   }
 
   String _formatDate(DateTime date) {
     const months = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December'
     ];
-    
+
     final day = date.day;
     final month = months[date.month - 1];
     final year = date.year;
-    
+
     return '$month $day, $year';
   }
 
@@ -87,6 +100,32 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
         return Colors.blue;
       default:
         return Colors.grey;
+    }
+  }
+
+  Color _getReportTypeColor(String? reportType) {
+    switch (reportType?.toLowerCase()) {
+      case 'hazardous':
+        return Colors.red;
+      case 'illegal':
+        return Colors.orange;
+      case 'inappropriate':
+        return Colors.purple;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  IconData _getReportTypeIcon(String? reportType) {
+    switch (reportType?.toLowerCase()) {
+      case 'hazardous':
+        return Icons.warning;
+      case 'illegal':
+        return Icons.gavel;
+      case 'inappropriate':
+        return Icons.report_problem;
+      default:
+        return Icons.info;
     }
   }
 
@@ -222,11 +261,13 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(Icons.broken_image, color: Colors.grey, size: 48),
+                              Icon(Icons.broken_image,
+                                  color: Colors.grey, size: 48),
                               SizedBox(height: 8),
                               Text(
                                 'Image not available',
-                                style: TextStyle(color: Colors.grey, fontSize: 14),
+                                style:
+                                    TextStyle(color: Colors.grey, fontSize: 14),
                               ),
                             ],
                           ),
@@ -253,8 +294,163 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
     );
   }
 
+  Widget _buildReportTypeSection() {
+    if (_reportType == null) return const SizedBox.shrink();
+
+    Color typeColor = _getReportTypeColor(_reportType);
+    IconData typeIcon = _getReportTypeIcon(_reportType);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: typeColor.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: typeColor.withOpacity(0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(typeIcon, size: 20, color: typeColor),
+              const SizedBox(width: 8),
+              Text(
+                'Report Type',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: typeColor,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: typeColor,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Text(
+              _reportType!,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionTakenSection() {
+    // Hide if status is "under review"
+    if (widget.report.status.toLowerCase() == 'under review') {
+      return const SizedBox.shrink();
+    }
+
+    // Show reject reason if rejected
+    if (widget.report.status.toLowerCase() == 'rejected' &&
+        _rejectReason != null &&
+        _rejectReason!.isNotEmpty) {
+      return Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.red[50],
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.red[200]!),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.error_outline, size: 20, color: Colors.red[600]),
+                const SizedBox(width: 8),
+                Text(
+                  'Rejection Reason',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.red[600],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _rejectReason!,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                color: Colors.red[700],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Otherwise, show action taken
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.blue[50],
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.blue[200]!),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.description_outlined, size: 20, color: Colors.blue[600]),
+              const SizedBox(width: 8),
+              Text(
+                'Action Description',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.blue[600],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (_isLoadingDetails)
+            const Row(
+              children: [
+                SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                SizedBox(width: 8),
+                Text('Loading details...'),
+              ],
+            )
+          else
+            Text(
+              _actionTaken ?? 'No action description available',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                color: Colors.blue[700],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildRejectReasonSection() {
-    if (widget.report.status.toLowerCase() != 'rejected') {
+    if (widget.report.status.toLowerCase() != 'rejected' ||
+        _rejectReason == null) {
       return const SizedBox.shrink();
     }
 
@@ -284,7 +480,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
             ],
           ),
           const SizedBox(height: 8),
-          if (_isLoadingRejectReason)
+          if (_isLoadingDetails)
             const Row(
               children: [
                 SizedBox(
@@ -298,7 +494,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
             )
           else
             Text(
-              _rejectReason ?? 'No rejection reason provided',
+              _rejectReason!,
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w500,
@@ -355,10 +551,14 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
             // Image Section
             _buildImageSection(),
 
+            // Report Type Section
+            _buildReportTypeSection(),
+
             // Report ID and Date
             _buildInfoCard(
               title: 'Report Details',
-              content: '', // Provide an empty string since customContent is used
+              content:
+                  '', // Provide an empty string since customContent is used
               icon: Icons.info_outline,
               customContent: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -414,7 +614,8 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
             // Location
             _buildInfoCard(
               title: 'Location',
-              content: _formatLocation(widget.report.gpsLatitude, widget.report.gpsLongitude),
+              content: _formatLocation(
+                  widget.report.gpsLatitude, widget.report.gpsLongitude),
               icon: Icons.location_on_outlined,
             ),
 
@@ -433,7 +634,10 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
               icon: Icons.track_changes_outlined,
             ),
 
-            // Reject Reason Section (only shows if status is rejected)
+            // Action Taken Section (shows action description)
+            _buildActionTakenSection(),
+
+            // Reject Reason Section (only shows if status is rejected and reject_reason exists)
             _buildRejectReasonSection(),
           ],
         ),
