@@ -655,7 +655,10 @@ class _ReportConfirmationScreenState extends State<ReportConfirmationScreen> {
 
       if (response.statusCode == 200) {
         if (mounted) {
-          Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+          Navigator.of(context).pushNamedAndRemoveUntil(
+            '/main',
+            (route) => false,
+          );
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Report submitted successfully!'),
