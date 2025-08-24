@@ -36,9 +36,18 @@ class _HomeScreenState extends State<HomeScreen> {
         _isLoadingReports = true;
       });
 
-      // Fetch only 2 most recent reports, ordered by timestamp descending
+      // Get the current user's ID
+      String? userId = widget.userId ?? await UserService.getCurrentSupabaseUserId();
+      if (userId == null) {
+        setState(() {
+          _recentReports = [];
+        });
+        return;
+      }
+
+      // Fetch only 2 most recent reports for this user
       final response = await http.get(
-        Uri.parse('http://192.168.0.103:8000/reports/?limit=2'),
+        Uri.parse('http://192.168.0.103:8000/reports/user/$userId'),
       );
 
       if (response.statusCode == 200) {
