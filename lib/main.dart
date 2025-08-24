@@ -8,6 +8,7 @@ import 'pages/my_reports_screen.dart';
 import 'pages/profile_screen.dart';
 import 'pages/login_page.dart';
 import 'pages/signup_page.dart';
+import 'pages/splash_screen.dart'; // Add this import
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -38,9 +39,9 @@ class MyApp extends StatelessWidget {
         scaffoldBackgroundColor: Colors.grey[100],
         useMaterial3: true,
       ),
-      initialRoute: '/login',
+      initialRoute: '/', // Changed from '/login' to '/' for splash screen
       routes: {
-        '/': (context) => const MainNavigation(), // <-- Add this line
+        '/': (context) => const SplashScreen(), // Changed to SplashScreen
         '/login': (context) => const LoginPage(),
         '/signup': (context) => const SignUpPage(),
         '/main': (context) => const MainNavigation(),

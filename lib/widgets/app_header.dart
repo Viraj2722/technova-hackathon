@@ -9,11 +9,11 @@ class AppHeader extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 20),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A1A1A), // Dark background like the logo
+        color: Colors.white, // Light background
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.3),
+            color: Colors.grey.withOpacity(0.15),
             blurRadius: 8,
             offset: const Offset(0, 4),
           ),
@@ -26,7 +26,7 @@ class AppHeader extends StatelessWidget {
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.1),
+              color: Colors.blue.withOpacity(0.08), // Light blue accent
               borderRadius: BorderRadius.circular(8),
             ),
             child: Stack(
@@ -37,7 +37,7 @@ class AppHeader extends StatelessWidget {
                   width: 28,
                   height: 20,
                   decoration: BoxDecoration(
-                    border: Border.all(color: Colors.white, width: 2),
+                    border: Border.all(color: Colors.blue, width: 2),
                     borderRadius: BorderRadius.circular(3),
                   ),
                 ),
@@ -50,13 +50,13 @@ class AppHeader extends StatelessWidget {
                       Container(
                         width: 3,
                         height: 8,
-                        color: Colors.white,
+                        color: Colors.blue,
                       ),
                       const SizedBox(width: 6),
                       Container(
                         width: 3,
                         height: 8,
-                        color: Colors.white,
+                        color: Colors.blue,
                       ),
                     ],
                   ),
@@ -70,7 +70,7 @@ class AppHeader extends StatelessWidget {
             style: TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.bold,
-              color: Colors.white,
+              color: Color(0xFF1A1A1A), // Dark text for light background
               letterSpacing: 0.5,
             ),
           ),

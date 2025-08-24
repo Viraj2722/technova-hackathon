@@ -545,11 +545,11 @@ async def get_monthly_report_count():
 # NEW: Get count of reports with status 'approved'
 @app.get("/reports/count/resolved")
 async def get_resolved_report_count():
-    """Get count of reports with status 'approved'"""
+    """Get count of reports with status 'resolved'"""
     try:
         result = supabase.table("reports") \
             .select("report_id", count="exact") \
-            .eq("status", "approved") \
+            .eq("status", "Resolved") \
             .execute()
         return {"count": result.count or 0}
     except Exception as e:

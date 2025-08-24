@@ -65,7 +65,7 @@ class _CommunityScreenState extends State<CommunityScreen> with SingleTickerProv
           unselectedLabelColor: Colors.grey[600],
           indicatorColor: Colors.blue[600],
           tabs: const [
-            Tab(text: 'Heatmap'),
+            Tab(text: 'Stats'), // Changed from 'Heatmap' to 'Stats'
             Tab(text: 'Leaderboard'),
           ],
         ),
@@ -156,36 +156,8 @@ class _CommunityScreenState extends State<CommunityScreen> with SingleTickerProv
                 ],
               ),
               const SizedBox(height: 24),
-              Container(
-                width: double.infinity,
-                height: 250,
-                decoration: BoxDecoration(
-                  color: Colors.grey[200],
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.grey[300]!),
-                ),
-                child: const Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.map,
-                        size: 48,
-                        color: Colors.grey,
-                      ),
-                      SizedBox(height: 8),
-                      Text(
-                        'Mumbai Heatmap',
-                        style: TextStyle(
-                          color: Colors.grey,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
+              // Removed the heatmap container and name
+              // const SizedBox(height: 8), // Optionally keep or remove this
             ],
           ),
         );
