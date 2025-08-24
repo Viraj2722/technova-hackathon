@@ -25,7 +25,7 @@ class _CommunityScreenState extends State<CommunityScreen>
   }
 
   Future<Map<String, int>> fetchStats() async {
-    final baseUrl = 'http://192.168.0.103:8000'; // Change to your backend URL
+    final baseUrl = 'http://192.168.0.103:8000';
     try {
       final monthResp =
           await http.get(Uri.parse('$baseUrl/reports/count/month'));
@@ -44,7 +44,7 @@ class _CommunityScreenState extends State<CommunityScreen>
   }
 
   Future<List<LeaderboardUser>> fetchLeaderboard() async {
-    final baseUrl = 'http://192.168.0.103:8000'; // Change to your backend URL
+    final baseUrl = 'http://192.168.0.103:8000';
     try {
       final response = await http.get(Uri.parse('$baseUrl/leaderboard/'));
       if (response.statusCode == 200) {
@@ -256,7 +256,7 @@ class _CommunityScreenState extends State<CommunityScreen>
           },
           child: ListView.builder(
             padding: const EdgeInsets.all(16),
-            itemCount: users.length + 1, // +1 for the header
+            itemCount: users.length + 1,
             itemBuilder: (context, index) {
               if (index == 0) {
                 return _buildLeaderboardHeader();
@@ -436,7 +436,7 @@ class _CommunityScreenState extends State<CommunityScreen>
                 Text(
                   user.username,
                   style: const TextStyle(
-                    fontSize: 14, // Made username a little smaller
+                    fontSize: 14,
                     fontWeight: FontWeight.w600,
                     color: Colors.black87,
                   ),
