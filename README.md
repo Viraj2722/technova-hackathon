@@ -10,6 +10,12 @@ This project is a Flutter app and FastAPI backend for reporting non-compliant bi
 
 ## Prerequisites
 
+## 📂 Model Download
+To run this app, please download the trained model file from the link below and place it in the root directory of the app:
+
+🔗 [Download Model File](https://github.com/Viraj2722/billboard-classification-model/raw/main/model.pkl)
+
+
 ### Backend
 
 - Python 3.10+
