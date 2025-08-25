@@ -11,9 +11,17 @@ This project is a Flutter app and FastAPI backend for reporting non-compliant bi
 ## Prerequisites
 
 ## 📂 Model Download
-To run this app, please download the trained model file from the link below and place it in the root directory of the app:
 
-🔗 [Download Model File](https://github.com/Viraj2722/billboard-classification-model/)
+To ddownload the YOLO model automatically, run:
+
+```sh
+python setup.py
+```
+
+This will:
+
+- Download `best.pt` from the GitHub repo (if not already present)
+- IF not Downloading , Download From GITHUB([text](https://github.com/Viraj2722/billboard-classification-model))
 
 
 ### Backend
@@ -39,6 +47,9 @@ To run this app, please download the trained model file from the link below and 
 1. **Install dependencies:**
 
    ```sh
+
+   cd backend
+
    pip install -r requirements.txt
    ```
 
